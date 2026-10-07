@@ -1,7 +1,20 @@
 'use client'
 
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, ClipboardList, ExternalLink, Filter, MapPin, Navigation, Route, Wrench } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  ExternalLink,
+  Filter,
+  MapPin,
+  Navigation,
+  Route,
+  Wrench,
+} from 'lucide-react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { Link } from '../../navigation'
 import { IssueMap } from '../../components/maps/IssueMap'
 import { ReportCard } from '../../components/reports/ReportCard'
@@ -13,25 +26,132 @@ import { useApp } from '../../context/AppContext'
 import type { Report, ReportStatus } from '../../types/domain'
 
 const filters: Array<'Todos' | ReportStatus> = ['Todos', 'Aberto', 'Em atendimento', 'Finalizado']
+const ACTIVE_ROUTE_STORAGE_KEY = 'cidade-em-ordem:active-route:v1'
+const DEFAULT_COMPLETION_PHOTO =
+  'https://images.unsplash.com/photo-1584467735871-8e85353a8413?auto=format&fit=crop&w=1200&q=82'
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'))
+    reader.readAsDataURL(file)
+  })
+}
 
 export function FieldOrdersPage() {
-  const { reports } = useApp()
+  const { reports, startReport, finishReport } = useApp()
   const [viewMode, setViewMode] = useState<'lista' | 'rota'>('lista')
   const [filter, setFilter] = useState<(typeof filters)[number]>('Todos')
   const [activeStopIndex, setActiveStopIndex] = useState(0)
+  const [activeRouteInfo, setActiveRouteInfo] = useState<{
+    crewName: string
+    reportIds: string[]
+  } | null>(null)
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null)
+  const [completionPhotoPreview, setCompletionPhotoPreview] = useState<string | null>(null)
+  const [isFinishing, setIsFinishing] = useState(false)
+
+  // Load dispatched route from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = localStorage.getItem(ACTIVE_ROUTE_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && Array.isArray(parsed.reportIds)) {
+          setActiveRouteInfo(parsed)
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }, [])
 
   const visibleReports = useMemo(
-    () => reports.filter((report) => filter === 'Todos' || report.status === filter).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () =>
+      reports
+        .filter((report) => filter === 'Todos' || report.status === filter)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [filter, reports],
   )
 
-  // Daily route stops: prioritized active orders (open & in progress), or all if none pending
+  // Daily route stops: dispatched sequence first, or active orders (open & in progress)
   const routeOrders = useMemo(() => {
+    if (activeRouteInfo && activeRouteInfo.reportIds.length > 0) {
+      const matched = activeRouteInfo.reportIds
+        .map((id) => reports.find((r) => r.id === id))
+        .filter((r): r is Report => Boolean(r))
+      if (matched.length > 0) return matched
+    }
     const active = reports.filter((r) => r.status !== 'Finalizado')
     return active.length > 0 ? active : reports
-  }, [reports])
+  }, [activeRouteInfo, reports])
 
   const currentStop: Report | undefined = routeOrders[activeStopIndex] ?? routeOrders[0]
+
+  const completedStopsCount = useMemo(
+    () => routeOrders.filter((r) => r.status === 'Finalizado').length,
+    [routeOrders],
+  )
+
+  const progressPercent =
+    routeOrders.length > 0 ? Math.round((completedStopsCount / routeOrders.length) * 100) : 0
+
+  const handleStartCurrentStop = () => {
+    if (!currentStop) return
+    try {
+      startReport(currentStop.id)
+      setActionFeedback(`Atendimento da parada #${activeStopIndex + 1} iniciado com sucesso!`)
+      window.setTimeout(() => setActionFeedback(null), 4000)
+    } catch (err) {
+      setActionFeedback(err instanceof Error ? err.message : 'Não foi possível iniciar o chamado.')
+    }
+  }
+
+  const handleFinishCurrentStop = async () => {
+    if (!currentStop) return
+    setIsFinishing(true)
+    try {
+      const photo = completionPhotoPreview || DEFAULT_COMPLETION_PHOTO
+      finishReport(currentStop.id, photo)
+      setCompletionPhotoPreview(null)
+      setActionFeedback(`Parada #${activeStopIndex + 1} declarada como concluída com sucesso!`)
+      window.setTimeout(() => setActionFeedback(null), 4000)
+
+      // Advance to next unfinished stop if available
+      const nextPendingIdx = routeOrders.findIndex(
+        (r, idx) => idx > activeStopIndex && r.status !== 'Finalizado',
+      )
+      if (nextPendingIdx !== -1) {
+        setActiveStopIndex(nextPendingIdx)
+      }
+    } catch (err) {
+      setActionFeedback(err instanceof Error ? err.message : 'Não foi possível finalizar o chamado.')
+    } finally {
+      setIsFinishing(false)
+    }
+  }
+
+  const handlePhotoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      setCompletionPhotoPreview(dataUrl)
+      setActionFeedback('Foto de conclusão anexada! Clique em "Declarar como pronta" para salvar.')
+      window.setTimeout(() => setActionFeedback(null), 4000)
+    } catch {
+      setActionFeedback('Não foi possível processar a fotografia.')
+    }
+  }
+
+  const handleJumpToNextPending = () => {
+    const nextPendingIdx = routeOrders.findIndex((r) => r.status !== 'Finalizado')
+    if (nextPendingIdx !== -1) {
+      setActiveStopIndex(nextPendingIdx)
+    }
+  }
 
   return (
     <div className="content-stack field-page-wrap">
@@ -108,17 +228,50 @@ export function FieldOrdersPage() {
         <section className="field-route-section" aria-label="Rota do dia da equipe de campo">
           <div className="field-route-summary-bar">
             <div>
-              <p className="eyebrow">Itinerário otimizado</p>
-              <h2>Rota operacional de hoje</h2>
+              <p className="eyebrow">Itinerário em Tempo Real</p>
+              <h2>Execução da Rota de Hoje</h2>
             </div>
             <span className="route-total-badge">
-              <CheckCircle2 size={16} /> {routeOrders.length} paradas programadas
+              <CheckCircle2 size={16} /> {routeOrders.length} paradas na rota
             </span>
+          </div>
+
+          {actionFeedback ? (
+            <div className="field-action-toast" role="status">
+              <CheckCircle2 size={17} />
+              <span>{actionFeedback}</span>
+            </div>
+          ) : null}
+
+          {activeRouteInfo ? (
+            <div className="field-dispatched-notice" role="status">
+              <Route size={16} />
+              <span>
+                Itinerário oficial despachado pela Gestão Central para <strong>{activeRouteInfo.crewName}</strong>
+              </span>
+            </div>
+          ) : null}
+
+          {/* Progress Tracker */}
+          <div className="field-route-progress-panel">
+            <div className="progress-panel-header">
+              <span>
+                Progresso do dia:{' '}
+                <strong>
+                  {completedStopsCount} de {routeOrders.length} paradas concluídas
+                </strong>
+              </span>
+              <span className="progress-percent-label">{progressPercent}%</span>
+            </div>
+            <div className="progress-track-bg">
+              <div className="progress-track-fill" style={{ width: `${progressPercent}%` }} />
+            </div>
           </div>
 
           <div className="field-route-map-card">
             <IssueMap
               reports={routeOrders}
+              routePoints={routeOrders}
               selectedId={currentStop?.id}
               onSelect={(report) => {
                 const index = routeOrders.findIndex((item) => item.id === report.id)
@@ -154,10 +307,64 @@ export function FieldOrdersPage() {
                 </div>
               </div>
 
+              {/* Direct Real-Time Status Actions */}
+              <div className="stop-active-status-action-box">
+                {currentStop.status === 'Aberto' && (
+                  <button
+                    type="button"
+                    className="button-primary stop-action-status-btn stop-action-start"
+                    onClick={handleStartCurrentStop}
+                  >
+                    <Wrench size={17} />
+                    <span>Iniciar atendimento neste ponto</span>
+                  </button>
+                )}
+
+                {currentStop.status === 'Em atendimento' && (
+                  <div className="stop-active-finish-controls">
+                    <button
+                      type="button"
+                      className="button-primary stop-action-status-btn stop-action-finish"
+                      onClick={handleFinishCurrentStop}
+                      disabled={isFinishing}
+                    >
+                      <CheckCircle2 size={17} />
+                      <span>{isFinishing ? 'Salvando...' : 'Declarar como pronta (Concluir)'}</span>
+                    </button>
+                    <label className="stop-upload-photo-label" title="Anexar foto de comprovação">
+                      <Camera size={16} />
+                      <span>{completionPhotoPreview ? 'Foto anexada ✓' : 'Anexar foto'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={handlePhotoUpload}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {currentStop.status === 'Finalizado' && (
+                  <div className="stop-status-finished-badge">
+                    <CheckCircle2 size={18} />
+                    <div className="stop-finished-text">
+                      <strong>Serviço finalizado com sucesso!</strong>
+                      <span>A ocorrência foi reparada e notificada ao munícipe.</span>
+                    </div>
+                    {completedStopsCount < routeOrders.length && (
+                      <button
+                        type="button"
+                        className="button-secondary button-small btn-next-pending"
+                        onClick={handleJumpToNextPending}
+                      >
+                        Próxima pendente →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="stop-active-actions">
-                <Link to={`/campo/ordens/${currentStop.id}`} className="button-primary stop-action-btn">
-                  <Wrench size={16} /> Atender chamado <ArrowRight size={15} />
-                </Link>
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${currentStop.latitude},${currentStop.longitude}`}
                   target="_blank"
@@ -166,6 +373,9 @@ export function FieldOrdersPage() {
                 >
                   <Navigation size={16} /> Navegar GPS <ExternalLink size={14} />
                 </a>
+                <Link to={`/campo/ordens/${currentStop.id}`} className="button-secondary stop-action-btn">
+                  <ClipboardList size={16} /> Laudo e fotos completas <ArrowRight size={14} />
+                </Link>
               </div>
 
               <div className="stop-stepper-footer">
@@ -197,14 +407,17 @@ export function FieldOrdersPage() {
             <div className="itinerary-list">
               {routeOrders.map((order, index) => {
                 const isActive = index === activeStopIndex
+                const isDone = order.status === 'Finalizado'
                 return (
                   <button
                     key={order.id}
                     type="button"
-                    className={`itinerary-item ${isActive ? 'itinerary-item-active' : ''}`}
+                    className={`itinerary-item ${isActive ? 'itinerary-item-active' : ''} ${isDone ? 'itinerary-item-done' : ''}`}
                     onClick={() => setActiveStopIndex(index)}
                   >
-                    <span className="itinerary-step-number">{index + 1}</span>
+                    <span className={`itinerary-step-number ${isDone ? 'itinerary-step-done' : ''}`}>
+                      {isDone ? '✓' : index + 1}
+                    </span>
                     <div className="itinerary-item-content">
                       <div className="itinerary-item-topline">
                         <strong>{order.category}</strong>

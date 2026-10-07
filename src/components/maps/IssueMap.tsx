@@ -14,6 +14,8 @@ export type IssueMapProps = {
   zoom?: number
   scrollWheelZoom?: boolean
   className?: string
+  routePoints?: Report[]
+  onRouteToggle?: (report: Report) => void
 }
 
 const IssueMapClient = dynamic<IssueMapProps>(

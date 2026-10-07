@@ -2,7 +2,7 @@
 
 import { divIcon } from 'leaflet'
 import { useEffect, useRef } from 'react'
-import { MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { MapPin } from 'lucide-react'
 import type { GeoPoint, Report, ReportCategory } from '../../types/domain'
 import { statusStyles } from '../../utils/report'
@@ -17,18 +17,25 @@ const categoryMarkerIcons: Record<ReportCategory, string> = {
   Poda: '<path d="M12 20v-7"/><path d="M12 13C7 13 5 10 6 6c4 0 6 2 6 7Z"/><path d="M12 15c5 0 7-3 6-7-4 0-6 2-6 7Z"/>',
 }
 
-function createMarkerIcon(report: Report, selected: boolean) {
-  const color = statusStyles[report.status].dot
+function createMarkerIcon(report: Report, selected: boolean, routeIndex?: number) {
+  const isRouted = routeIndex !== undefined && routeIndex >= 0
+  const isDone = report.status === 'Finalizado'
+  const color = isRouted ? (isDone ? '#15803d' : '#185a4e') : statusStyles[report.status].dot
   const count = report.confirmations?.length ?? 0
   const icon = categoryMarkerIcons[report.category]
-  const label = `${report.category}, ${report.status}, ${count} ${count === 1 ? 'confirmação' : 'confirmações'}`
+  const stopLabel = isRouted ? `Parada ${routeIndex + 1}: ` : ''
+  const label = `${stopLabel}${report.category}, ${report.status}, ${count} ${count === 1 ? 'confirmação' : 'confirmações'}`
+  const coreContent = isRouted
+    ? `<span class="map-route-marker-badge ${isDone ? 'map-route-marker-done' : ''}">${isDone ? '✓' : routeIndex + 1}</span>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`
+
   return divIcon({
     className: 'map-report-marker-host',
     iconSize: [46, 48],
     iconAnchor: [23, 45],
     popupAnchor: [0, -40],
-    html: `<span class="map-report-marker ${selected ? 'map-report-marker-selected' : ''}" data-report-id="${report.id}" style="--marker-color:${color}" role="button" tabindex="0" aria-label="${label}">
-      <span class="map-report-marker-core"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span>
+    html: `<span class="map-report-marker ${selected ? 'map-report-marker-selected' : ''} ${isRouted ? 'map-report-marker-routed' : ''}" data-report-id="${report.id}" style="--marker-color:${color}" role="button" tabindex="0" aria-label="${label}">
+      <span class="map-report-marker-core">${coreContent}</span>
       ${count > 0 ? `<span class="map-report-marker-count" aria-hidden="true">${count}</span>` : ''}
     </span>`,
   })
@@ -79,6 +86,8 @@ export function IssueMapClient({
   zoom = 13,
   scrollWheelZoom = false,
   className = '',
+  routePoints,
+  onRouteToggle,
 }: {
   reports: Report[]
   selectedId?: string
@@ -90,6 +99,8 @@ export function IssueMapClient({
   zoom?: number
   scrollWheelZoom?: boolean
   className?: string
+  routePoints?: Report[]
+  onRouteToggle?: (report: Report) => void
 }) {
   const selectedReport = reports.find((report) => report.id === selectedId)
   const mapRootRef = useRef<HTMLDivElement>(null)
@@ -103,11 +114,15 @@ export function IssueMapClient({
       const report = marker?.dataset.reportId ? reports.find((item) => item.id === marker.dataset.reportId) : undefined
       if (!report) return
       event.preventDefault()
-      onSelect?.(report)
+      if (onRouteToggle) {
+        onRouteToggle(report)
+      } else {
+        onSelect?.(report)
+      }
     }
     root.addEventListener('keydown', handleKeyDown)
     return () => root.removeEventListener('keydown', handleKeyDown)
-  }, [onSelect, reports])
+  }, [onRouteToggle, onSelect, reports])
 
   return (
     <div ref={mapRootRef} className={`issue-map ${className}`}>
@@ -123,17 +138,44 @@ export function IssueMapClient({
           maxZoom={20}
         />
         <MapViewport selectedReport={selectedReport} focusPoint={focusPoint} onCenterChange={onCenterChange} />
+        {routePoints && routePoints.length > 1 ? (
+          <>
+            <Polyline
+              positions={routePoints.map((r) => [r.latitude, r.longitude] as [number, number])}
+              pathOptions={{ color: '#0d5257', weight: 8, opacity: 0.25 }}
+            />
+            <Polyline
+              positions={routePoints.map((r) => [r.latitude, r.longitude] as [number, number])}
+              pathOptions={{ color: '#185a4e', weight: 4, opacity: 0.95, dashArray: '8, 8' }}
+            />
+          </>
+        ) : null}
         {reports.map((report) => {
           const selected = report.id === selectedId
+          const routeIndex = routePoints ? routePoints.findIndex((r) => r.id === report.id) : undefined
           return (
             <Marker
               key={report.id}
               position={[report.latitude, report.longitude]}
-              icon={createMarkerIcon(report, selected)}
-              eventHandlers={{ click: () => onSelect?.(report) }}
+              icon={createMarkerIcon(report, selected, routeIndex)}
+              eventHandlers={{
+                click: () => {
+                  if (onRouteToggle) {
+                    onRouteToggle(report)
+                  } else {
+                    onSelect?.(report)
+                  }
+                },
+              }}
             >
               <Tooltip direction="top" offset={[0, -34]} opacity={0.96}>
-                {report.category} · {report.status}
+                {onRouteToggle
+                  ? routeIndex !== undefined && routeIndex >= 0
+                    ? `Parada ${routeIndex + 1}: ${report.category} (${report.region}) · Clique para remover da rota`
+                    : `Adicionar à rota: ${report.category} (${report.region})`
+                  : routeIndex !== undefined && routeIndex >= 0
+                    ? `Parada ${routeIndex + 1}: ${report.category} · ${report.status}`
+                    : `${report.category} · ${report.status}`}
               </Tooltip>
             </Marker>
           )

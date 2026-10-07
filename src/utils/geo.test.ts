@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Report } from '../types/domain'
-import { distanceInMeters, findNearbyReports } from './geo'
+import { calculateRouteDistanceKm, distanceInMeters, findNearbyReports, optimizeRouteOrder } from './geo'
 
 const baseReport: Report = {
   id: 'nearby-report',
@@ -39,5 +39,24 @@ describe('geo helpers', () => {
 
     expect(result.map(({ report }) => report.id)).toEqual(['same-category', 'other-category'])
     expect(result.every(({ report }) => report.status !== 'Finalizado')).toBe(true)
+  })
+
+  it('calcula a distância acumulada de uma rota em km', () => {
+    const points = [
+      { latitude: -23.0888, longitude: -47.2185 },
+      { latitude: -23.0955, longitude: -47.214 },
+      { latitude: -23.112, longitude: -47.234 },
+    ]
+    const km = calculateRouteDistanceKm(points)
+    expect(km).toBeGreaterThan(2.5)
+    expect(km).toBeLessThan(4.5)
+  })
+
+  it('otimiza a ordem de paradas usando vizinho mais próximo', () => {
+    const p1 = { id: '1', latitude: -23.08, longitude: -47.2 }
+    const p2 = { id: '2', latitude: -23.12, longitude: -47.24 } // Far
+    const p3 = { id: '3', latitude: -23.081, longitude: -47.201 } // Close to p1
+    const optimized = optimizeRouteOrder([p1, p2, p3])
+    expect(optimized.map((p) => p.id)).toEqual(['1', '3', '2'])
   })
 })

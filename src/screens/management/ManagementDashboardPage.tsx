@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  ArrowDown,
+  ArrowUp,
   BarChart3,
   CheckCircle2,
   ClipboardList,
@@ -14,6 +16,7 @@ import {
   Send,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Truck,
   UsersRound,
   Wrench,
@@ -28,6 +31,7 @@ import { useApp } from '../../context/AppContext'
 import { averageServiceDuration } from '../../services/reportRepository'
 import { categoryStyles, formatCount, formatDuration, formatShortDate } from '../../utils/report'
 import { CREW_MEMBERS } from '../../data/crew'
+import { calculateRouteDistanceKm, optimizeRouteOrder } from '../../utils/geo'
 
 type FilterValue = 'Todos' | ReportStatus
 
@@ -99,6 +103,7 @@ export function ManagementDashboardPage() {
   const [routeCrewId, setRouteCrewId] = useState(CREW_MEMBERS[0]?.id ?? '')
   const [selectedRouteReportIds, setSelectedRouteReportIds] = useState<string[]>([])
   const [routeDispatchedNotice, setRouteDispatchedNotice] = useState<string | null>(null)
+  const [focusedRouteStopId, setFocusedRouteStopId] = useState<string | undefined>(undefined)
 
   const regions = useMemo(
     () => Array.from(new Set(reports.map((report) => report.region))).sort((a, b) => a.localeCompare(b)),
@@ -230,14 +235,32 @@ export function ManagementDashboardPage() {
     setIsWalkInOpen(false)
   }
 
-  // Handle route planning toggle
-  const toggleRouteReport = (id: string) => {
+  // Handle route planning toggle from list checkbox or map marker click
+  const toggleRouteReport = (reportOrId: Report | string) => {
+    const id = typeof reportOrId === 'string' ? reportOrId : reportOrId.id
     setSelectedRouteReportIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     )
   }
 
-  // Dispatch route to team
+  // Reorder stops up/down in the itinerary sequence
+  const moveStop = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= selectedRouteReportIds.length) return
+    const newIds = [...selectedRouteReportIds]
+    const [removed] = newIds.splice(index, 1)
+    newIds.splice(newIndex, 0, removed)
+    setSelectedRouteReportIds(newIds)
+  }
+
+  // Optimize route order using nearest-neighbor TSP algorithm
+  const handleOptimizeRoute = () => {
+    if (selectedRouteReports.length <= 1) return
+    const optimized = optimizeRouteOrder(selectedRouteReports)
+    setSelectedRouteReportIds(optimized.map((r) => r.id))
+  }
+
+  // Dispatched route storage and assignment
   const handleDispatchRoute = () => {
     const crew = CREW_MEMBERS.find((m) => m.id === routeCrewId)
     if (!crew || selectedRouteReportIds.length === 0) return
@@ -251,16 +274,48 @@ export function ManagementDashboardPage() {
       }
     })
 
+    // Persist active route for field operations
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'cidade-em-ordem:active-route:v1',
+          JSON.stringify({
+            crewId: crew.id,
+            crewName: crew.name,
+            reportIds: selectedRouteReportIds,
+            dispatchedAt: new Date().toISOString(),
+            status: 'active',
+          }),
+        )
+      } catch {
+        // Ignore storage error
+      }
+    }
+
     setRouteDispatchedNotice(
       `Rota com ${selectedRouteReportIds.length} paradas despachada com sucesso para ${crew.name}!`,
     )
     window.setTimeout(() => setRouteDispatchedNotice(null), 5000)
   }
 
+  // Ordered list of reports matching the exact selectedRouteReportIds sequence
   const selectedRouteReports = useMemo(
-    () => reports.filter((r) => selectedRouteReportIds.includes(r.id)),
+    () =>
+      selectedRouteReportIds
+        .map((id) => reports.find((r) => r.id === id))
+        .filter((r): r is Report => Boolean(r)),
     [reports, selectedRouteReportIds],
   )
+
+  const routeDistanceKm = useMemo(
+    () => calculateRouteDistanceKm(selectedRouteReports),
+    [selectedRouteReports],
+  )
+
+  const routeEstimatedTimeMinutes = useMemo(() => {
+    if (selectedRouteReports.length === 0) return 0
+    return Math.round(selectedRouteReports.length * 35 + routeDistanceKm * 3.5)
+  }, [selectedRouteReports.length, routeDistanceKm])
 
   return (
     <div className="content-stack dashboard-page desktop-command-center">
@@ -595,10 +650,10 @@ export function ManagementDashboardPage() {
         <section className="panel-card route-planner-panel" aria-label="Planejador de rotas de campo">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Logística e Despacho</p>
-              <h2>Planejador da Rota do Dia</h2>
+              <p className="eyebrow">Logística e Despacho Operacional</p>
+              <h2>Planejador e Visualizador da Rota do Dia</h2>
               <p className="panel-description">
-                Agrupe chamados pendentes e despache a rota sequencial diretamente para os dispositivos da equipe em campo.
+                Visualize em tempo real o trajeto das viaturas, adicione paradas clicando no mapa interativo e despache a rota otimizada diretamente para a equipe em campo.
               </p>
             </div>
             <Route size={24} />
@@ -611,34 +666,173 @@ export function ManagementDashboardPage() {
             </div>
           ) : null}
 
-          <div className="route-planner-grid">
-            <div className="route-planner-config">
-              <div className="form-group">
-                <label htmlFor="route-crew-select">
-                  <strong>Equipe responsável pelo despacho</strong>
-                </label>
-                <select
-                  id="route-crew-select"
-                  className="select-input select-full"
-                  value={routeCrewId}
-                  onChange={(e) => setRouteCrewId(e.target.value)}
-                >
-                  {CREW_MEMBERS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} — {m.specialty} ({CREW_EQUIPMENT[m.id]?.vehicle ?? 'Viatura padrão'})
-                    </option>
-                  ))}
-                </select>
+          {/* Quick Stats & Controls Bar */}
+          <div className="route-planner-toolbar">
+            <div className="route-toolbar-team">
+              <label htmlFor="route-crew-select">
+                <Truck size={16} />
+                <span>Equipe:</span>
+              </label>
+              <select
+                id="route-crew-select"
+                className="select-input select-compact"
+                value={routeCrewId}
+                onChange={(e) => setRouteCrewId(e.target.value)}
+              >
+                {CREW_MEMBERS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} — {m.specialty} ({CREW_EQUIPMENT[m.id]?.vehicle ?? 'Viatura padrão'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="route-toolbar-metrics">
+              <span className="route-metric-pill">
+                <strong>{selectedRouteReportIds.length}</strong> paradas
+              </span>
+              <span className="route-metric-pill">
+                <strong>~{routeDistanceKm} km</strong> trajeto
+              </span>
+              <span className="route-metric-pill">
+                <strong>~{routeEstimatedTimeMinutes} min</strong> operação
+              </span>
+            </div>
+
+            <div className="route-toolbar-actions">
+              <button
+                type="button"
+                className="button-secondary button-small btn-optimize-route"
+                onClick={handleOptimizeRoute}
+                disabled={selectedRouteReports.length < 2}
+                title="Reorganiza as paradas pela menor distância no mapa"
+              >
+                <Sparkles size={15} />
+                <span>Otimizar trajeto</span>
+              </button>
+
+              <button
+                type="button"
+                className="button-primary button-small button-dispatch-route"
+                onClick={handleDispatchRoute}
+                disabled={selectedRouteReportIds.length === 0}
+              >
+                <Send size={15} />
+                <span>Despachar rota ({selectedRouteReportIds.length})</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="route-map-instruction-bar">
+            <span>💡 <strong>Dica interativa:</strong> Clique nos marcadores do mapa para incluir ou remover paradas da rota. O itinerário é recalculado e desenhado em tempo real.</span>
+          </div>
+
+          {/* 2-column Layout: Map on left, Stops Sequence and Available Pool on right */}
+          <div className="route-planner-interactive-grid">
+            <div className="route-planner-map-container">
+              <IssueMap
+                reports={pendingOrders}
+                routePoints={selectedRouteReports}
+                onRouteToggle={toggleRouteReport}
+                selectedId={focusedRouteStopId}
+                onSelect={(report) => {
+                  setFocusedRouteStopId(report.id)
+                  toggleRouteReport(report)
+                }}
+                className="map-route-planner"
+                zoom={14}
+              />
+            </div>
+
+            <div className="route-planner-sidebar">
+              {/* Sequence of stops */}
+              <div className="route-stops-card">
+                <div className="route-stops-header">
+                  <div>
+                    <h3>Itinerário em Sequência</h3>
+                    <p className="route-stops-sub">{selectedRouteReports.length} paradas na ordem de atendimento</p>
+                  </div>
+                  {selectedRouteReports.length > 0 && (
+                    <button
+                      type="button"
+                      className="button-link-subtle"
+                      onClick={() => setSelectedRouteReportIds([])}
+                    >
+                      Limpar rota
+                    </button>
+                  )}
+                </div>
+
+                {selectedRouteReports.length > 0 ? (
+                  <div className="route-preview-stops-sequence">
+                    {selectedRouteReports.map((stop, index) => (
+                      <div
+                        key={stop.id}
+                        className={`preview-stop-item ${stop.id === focusedRouteStopId ? 'preview-stop-item-focused' : ''}`}
+                        onClick={() => setFocusedRouteStopId(stop.id)}
+                      >
+                        <span className="preview-stop-marker">{index + 1}</span>
+                        <div className="preview-stop-details">
+                          <div className="preview-stop-topline">
+                            <strong>{stop.category}</strong>
+                            <StatusBadge status={stop.status} compact />
+                          </div>
+                          <p className="preview-stop-address">
+                            <MapPin size={13} /> {stop.address || stop.region}
+                          </p>
+                          <small className="preview-stop-protocol">{stop.protocol}</small>
+                        </div>
+                        <div className="preview-stop-reorder-actions" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="stop-reorder-btn"
+                            disabled={index === 0}
+                            onClick={() => moveStop(index, 'up')}
+                            aria-label={`Mover parada ${index + 1} para cima`}
+                            title="Mover para cima"
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="stop-reorder-btn"
+                            disabled={index === selectedRouteReports.length - 1}
+                            onClick={() => moveStop(index, 'down')}
+                            aria-label={`Mover parada ${index + 1} para baixo`}
+                            title="Mover para baixo"
+                          >
+                            <ArrowDown size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="stop-remove-btn"
+                            onClick={() => toggleRouteReport(stop.id)}
+                            aria-label={`Remover parada ${index + 1} da rota`}
+                            title="Remover da rota"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="route-preview-empty">
+                    <p>Nenhuma parada na rota. Clique nos pinos do mapa ao lado ou marque nos chamados pendentes abaixo para montar o itinerário.</p>
+                  </div>
+                )}
               </div>
 
-              <div className="route-selection-box">
-                <div className="selection-box-header">
-                  <strong>Selecione os chamados para incluir na rota</strong>
-                  <span className="badge-count">{selectedRouteReportIds.length} selecionados</span>
+              {/* Pending orders pool */}
+              <div className="route-pending-pool-card">
+                <div className="pending-pool-header">
+                  <strong>Chamados pendentes no município</strong>
+                  <span className="badge-count">{pendingOrders.length} disponíveis</span>
                 </div>
                 <div className="route-selectable-orders-list">
                   {pendingOrders.map((order) => {
                     const isChecked = selectedRouteReportIds.includes(order.id)
+                    const stopIndex = selectedRouteReportIds.indexOf(order.id)
                     return (
                       <label
                         key={order.id}
@@ -653,7 +847,11 @@ export function ManagementDashboardPage() {
                         <div className="route-checkbox-content">
                           <div className="route-card-topline">
                             <strong>{order.category}</strong>
-                            <StatusBadge status={order.status} compact />
+                            {isChecked ? (
+                              <span className="stop-pill-inline">Parada #{stopIndex + 1}</span>
+                            ) : (
+                              <StatusBadge status={order.status} compact />
+                            )}
                           </div>
                           <p className="route-card-addr">{order.address || order.region}</p>
                           <small className="route-card-protocol">{order.protocol}</small>
@@ -666,49 +864,6 @@ export function ManagementDashboardPage() {
                   ) : null}
                 </div>
               </div>
-
-              <button
-                type="button"
-                className="button-primary button-dispatch-route"
-                onClick={handleDispatchRoute}
-                disabled={selectedRouteReportIds.length === 0}
-              >
-                <Send size={16} />
-                <span>Despachar rota para a equipe ({selectedRouteReportIds.length} paradas)</span>
-              </button>
-            </div>
-
-            <div className="route-planner-preview">
-              <div className="route-preview-header">
-                <h3>Visualização do Itinerário Gerado</h3>
-                <span className="route-time-estimate">
-                  Estimativa: ~{Math.max(1, selectedRouteReportIds.length * 45)}min de operação
-                </span>
-              </div>
-
-              {selectedRouteReports.length > 0 ? (
-                <div className="route-preview-stops-sequence">
-                  {selectedRouteReports.map((stop, index) => (
-                    <div key={stop.id} className="preview-stop-item">
-                      <span className="preview-stop-marker">{index + 1}</span>
-                      <div className="preview-stop-details">
-                        <div className="preview-stop-topline">
-                          <strong>{stop.category}</strong>
-                          <span className="preview-stop-protocol">{stop.protocol}</span>
-                        </div>
-                        <p className="preview-stop-address">
-                          <MapPin size={13} /> {stop.address || stop.region}
-                        </p>
-                        <p className="preview-stop-desc">{stop.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="route-preview-empty">
-                  <p>Marque um ou mais chamados à esquerda para montar a rota da equipe.</p>
-                </div>
-              )}
             </div>
           </div>
         </section>

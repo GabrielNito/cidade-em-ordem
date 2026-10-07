@@ -35,3 +35,36 @@ export function findNearbyReports(
     })
 }
 
+export function calculateRouteDistanceKm(points: GeoPoint[]): number {
+  if (points.length < 2) return 0
+  let totalMeters = 0
+  for (let i = 0; i < points.length - 1; i++) {
+    totalMeters += distanceInMeters(points[i], points[i + 1])
+  }
+  return Number((totalMeters / 1000).toFixed(1))
+}
+
+export function optimizeRouteOrder<T extends GeoPoint>(points: T[]): T[] {
+  if (points.length <= 2) return [...points]
+  const unvisited = [...points]
+  const result: T[] = [unvisited.shift()!]
+
+  while (unvisited.length > 0) {
+    const current = result[result.length - 1]
+    let nearestIdx = 0
+    let nearestDist = Infinity
+
+    for (let i = 0; i < unvisited.length; i++) {
+      const dist = distanceInMeters(current, unvisited[i])
+      if (dist < nearestDist) {
+        nearestDist = dist
+        nearestIdx = i
+      }
+    }
+
+    result.push(unvisited.splice(nearestIdx, 1)[0])
+  }
+
+  return result
+}
+
