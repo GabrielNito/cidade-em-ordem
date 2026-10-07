@@ -61,3 +61,20 @@ export interface GeoPoint {
   latitude: number
   longitude: number
 }
+
+export type NotificationType =
+  | 'STATUS_UPDATE'
+  | 'COMMUNITY_SUPPORT'
+  | 'SERVICE_COMPLETED'
+  | 'OFFICIAL_ALERT'
+
+export interface AppNotification {
+  id: string
+  type: NotificationType
+  title: string
+  message: string
+  protocol?: string
+  reportId?: string
+  read: boolean
+  createdAt: string
+}

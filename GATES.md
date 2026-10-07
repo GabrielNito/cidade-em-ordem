@@ -22,12 +22,12 @@ Scope: maintain the Next.js frontend while preserving the current domain behavio
 - [x] G3: existing domain and repository tests pass after the migration
   CHECK: npm test && echo "DOMAIN TESTS PASSED"
   EXPECT: DOMAIN TESTS PASSED
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=f4852eb717a6b298705082691a8692f4572b99346191627c465abdf6a1b266e2; output-bytes=1211
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=a5983ae03b388128df503884831c001e8f87d0668a2b0eccd23416cdef7993d5; output-bytes=1210
 
 - [x] G4: the production Next.js build completes
   CHECK: npm run build && echo "NEXT BUILD PASSED"
   EXPECT: NEXT BUILD PASSED
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=046c2d182eecbcfbaac772ed2031b4bd17123ffddb48a7fc4abceb9bd24ecf24; output-bytes=1074
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=cb783ce8d5d225b9ed28418f920cafb33f10bf04dfc71defc90c9bbf684203fd; output-bytes=1074
 
 - [x] G5: the migrated application is visually reviewed at mobile and desktop sizes, including login, citizen map, reports, field orders, management dashboard, and design sheet
   EVIDENCE: Playwright review completed for login, citizen map, citizen reports, field orders, management dashboard, design sheet, and the Iteration 08 citizen-map treatment at mobile/desktop target sizes; no page errors.
@@ -45,7 +45,7 @@ Scope: maintain the Next.js frontend while preserving the current domain behavio
 - [x] G8: the guided occurrence flow and map changes preserve static, domain, and production checks
   CHECK: npm run typecheck && npm run lint && npm test && npm run build && echo "GUIDED FLOW BUILD PASSED"
   EXPECT: GUIDED FLOW BUILD PASSED
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=e4278c4ca3120f9f1290e1a979438b7acf2e7467be09f618ae45dd6fd0fbfae9; output-bytes=2363
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=f2eba4236a973fcd0316f2389ea82a1eec1c6fcea2d3d378dbe8a2bb5d5bf755; output-bytes=2364
 
 - [x] G9: the updated map and guided occurrence flow are visually reviewed in the browser at mobile and desktop sizes
   EVIDENCE: Playwright review completed for softened but still geographic OSM cartography, closer citizen-map framing, balanced four-action mobile navigation, red fixed location pin, shadcn-style occurrence drawer on mobile/desktop, popup removal, Escape dismissal, location picker, photo step, details step, address search, and return-to-map flow; no page errors.
@@ -63,7 +63,7 @@ Scope: maintain the Next.js frontend while preserving the current domain behavio
 - [x] G12: demo-experience implementation preserves static checks, domain tests, and production build
   CHECK: npm run typecheck && npm run lint && npm test && npm run build && echo "DEMO EXPERIENCE BUILD PASSED"
   EXPECT: DEMO EXPERIENCE BUILD PASSED
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=26f6a0362e1a72fcfaa43d458ba56e0bc239918b79feef292796ffdc4ad5dc49; output-bytes=2367
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=824005f237d5/29 entries; EXPECT=matched; output-sha256=eca592919a4402ecb056c300c3d285cdf5078f1378d3b1870a46da17615965c4; output-bytes=2368
 
 - [x] G13: citizen, field, management, login, and guided-report journeys are visually reviewed at desktop and mobile widths
   EVIDENCE: Chrome headless review at 1440×1024 and 390×844 verified login balance, citizen map/drawer/submission receipt/list view, guided location and category-before-photo flow, text-size persistence, profile modal Escape/focus return, field next action, and management collapsed mobile filters; no page errors.

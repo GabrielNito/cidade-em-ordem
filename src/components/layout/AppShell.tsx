@@ -1,10 +1,11 @@
 'use client'
 
-import { ClipboardList, FileText, Landmark, LayoutDashboard, Map, Plus, UserRound, Wrench } from 'lucide-react'
+import { Bell, ClipboardList, FileText, Landmark, LayoutDashboard, Map, Plus, UserRound, Wrench } from 'lucide-react'
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { UserRole } from '../../types/domain'
 import { BottomNavigation, type NavigationItem } from './BottomNavigation'
+import { NotificationDrawer } from '../notifications/NotificationDrawer'
 import { useApp } from '../../context/AppContext'
 import { NavLink } from '../../navigation'
 
@@ -36,7 +37,8 @@ const roleCopy: Record<UserRole, { label: string; home: string; navigation: Navi
   },
 }
 
-function Sidebar({ role }: { role: UserRole }) {
+function Sidebar({ role, onOpenNotifications }: { role: UserRole; onOpenNotifications?: () => void }) {
+  const { unreadNotificationsCount } = useApp()
   const copy = roleCopy[role]
   return (
     <aside className="desktop-sidebar">
@@ -67,6 +69,20 @@ function Sidebar({ role }: { role: UserRole }) {
             <span>{label}</span>
           </NavLink>
         ))}
+        {role === 'CITIZEN' && onOpenNotifications ? (
+          <button
+            type="button"
+            className="sidebar-nav-link sidebar-notif-trigger"
+            onClick={onOpenNotifications}
+            aria-label={`Notificações: ${unreadNotificationsCount} ${unreadNotificationsCount === 1 ? 'não lida' : 'não lidas'}`}
+          >
+            <Bell size={19} strokeWidth={1.8} />
+            <span>Notificações</span>
+            {unreadNotificationsCount > 0 ? (
+              <span className="sidebar-notif-badge">{unreadNotificationsCount}</span>
+            ) : null}
+          </button>
+        ) : null}
       </nav>
       <div className="sidebar-footer">
         <span className="municipal-seal-placeholder"><Landmark size={17} /></span>
@@ -76,8 +92,8 @@ function Sidebar({ role }: { role: UserRole }) {
   )
 }
 
-function Topbar({ role }: { role: UserRole }) {
-  const { user } = useApp()
+function Topbar({ role, onOpenNotifications }: { role: UserRole; onOpenNotifications?: () => void }) {
+  const { user, unreadNotificationsCount } = useApp()
   const pathname = usePathname() ?? ''
   const copy = roleCopy[role]
   const profilePath = role === 'CITIZEN' ? '/app/perfil' : role === 'FIELD_AGENT' ? '/campo/perfil' : '/gestao/perfil'
@@ -90,29 +106,50 @@ function Topbar({ role }: { role: UserRole }) {
         </NavLink>
       </div>
       <div className="topbar-context">{copy.label}</div>
-      <div className="topbar-user-slot desktop-only-user">
-        <NavLink to={profilePath} className={`topbar-user ${isProfile ? 'topbar-user-active' : ''}`} aria-label="Abrir perfil">
-          <span className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
-          <span className="topbar-user-name">{user.name.split(' ')[0]}</span>
-          <UserRound size={16} aria-hidden="true" />
-        </NavLink>
+      <div className="topbar-actions-slot">
+        {role === 'CITIZEN' && onOpenNotifications ? (
+          <button
+            type="button"
+            className="topbar-notif-button"
+            onClick={onOpenNotifications}
+            aria-label={`Notificações: ${unreadNotificationsCount} ${unreadNotificationsCount === 1 ? 'não lida' : 'não lidas'}`}
+          >
+            <Bell size={19} />
+            {unreadNotificationsCount > 0 ? (
+              <span className="topbar-notif-badge" aria-hidden="true">
+                {unreadNotificationsCount}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        <div className="desktop-only-user">
+          <NavLink to={profilePath} className={`topbar-user ${isProfile ? 'topbar-user-active' : ''}`} aria-label="Abrir perfil">
+            <span className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
+            <span className="topbar-user-name">{user.name.split(' ')[0]}</span>
+            <UserRound size={16} aria-hidden="true" />
+          </NavLink>
+        </div>
       </div>
     </header>
   )
 }
 
 export function AppShell({ role, children }: { role: UserRole; children: ReactNode }) {
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
   const copy = roleCopy[role]
   const pathname = usePathname() ?? ''
   const isReportFlow = role === 'CITIZEN' && pathname.startsWith('/app/nova-ocorrencia')
   return (
     <div className="app-shell">
-      <Sidebar role={role} />
+      <Sidebar role={role} onOpenNotifications={() => setIsNotifOpen(true)} />
       <div className="app-main">
-        <Topbar role={role} />
+        <Topbar role={role} onOpenNotifications={() => setIsNotifOpen(true)} />
         <main className="page-main">{children}</main>
         {isReportFlow ? null : <BottomNavigation items={copy.navigation} showFab={role === 'CITIZEN'} />}
       </div>
+      {role === 'CITIZEN' ? (
+        <NotificationDrawer isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
+      ) : null}
     </div>
   )
 }
