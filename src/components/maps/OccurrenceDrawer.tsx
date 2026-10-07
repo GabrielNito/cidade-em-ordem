@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, CalendarDays, MapPin, UsersRound, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, MapPin, UsersRound, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { ConfirmationButton } from '../reports/ConfirmationButton'
 import { StatusTimeline } from '../reports/StatusTimeline'
@@ -18,6 +18,7 @@ export function OccurrenceDrawer({
   onConfirm,
   onClose,
   onViewDetails,
+  notice,
 }: {
   report: Report
   userId: string
@@ -25,6 +26,7 @@ export function OccurrenceDrawer({
   onConfirm: (id: string) => void
   onClose: () => void
   onViewDetails: () => void
+  notice?: string
 }) {
   const [activeSnapPoint, setActiveSnapPoint] = useState<number | string | null>(1)
 
@@ -38,8 +40,8 @@ export function OccurrenceDrawer({
       modal
       fixed
       closeThreshold={0.35}
-      snapPoints={[0.62, 1]}
-      fadeFromIndex={1}
+      snapPoints={[0.82]}
+      fadeFromIndex={0}
       activeSnapPoint={activeSnapPoint}
       setActiveSnapPoint={setActiveSnapPoint}
       onOpenChange={(open) => { if (!open) onClose() }}
@@ -62,6 +64,8 @@ export function OccurrenceDrawer({
               </button>
             </DrawerClose>
           </header>
+
+          {notice ? <p className="occurrence-drawer-notice" role="status"><CheckCircle2 size={17} aria-hidden="true" /> {notice}</p> : null}
 
           <div className="occurrence-drawer-status-row">
             <StatusBadge status={report.status} compact />
@@ -89,11 +93,11 @@ export function OccurrenceDrawer({
               <span>Confirmações</span>
               <strong><UsersRound size={15} aria-hidden="true" /> {report.confirmations?.length ?? 0}</strong>
             </div>
-            <div>
+            <div className="occurrence-drawer-info-full">
               <span>Registrado em</span>
               <strong><CalendarDays size={15} aria-hidden="true" /> {formatDateTime(report.createdAt)}</strong>
             </div>
-            <div>
+            <div className="occurrence-drawer-info-full">
               <span>Coordenadas</span>
               <strong>{formatCoordinates(report.latitude, report.longitude)}</strong>
             </div>

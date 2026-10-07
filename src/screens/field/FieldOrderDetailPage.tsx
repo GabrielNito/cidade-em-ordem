@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, ArrowLeft, Camera, CheckCircle2, MapPin, Play, Save, UserRound, Wrench } from 'lucide-react'
+import { AlertCircle, ArrowDown, ArrowLeft, Camera, CheckCircle2, MapPin, Play, Save, UserRound, Wrench } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate, useParams } from '../../navigation'
 import { IssueMap } from '../../components/maps/IssueMap'
@@ -111,11 +111,12 @@ export function FieldOrderDetailPage() {
           </div>
         </div>
       </section>
+      <a className="field-quick-action" href="#field-actions"><span><Wrench size={18} /><small>Próxima ação</small><strong>Atualizar ordem</strong></span><ArrowDown size={19} aria-hidden="true" /></a>
       <section className="detail-section">
         <div className="detail-section-heading"><div><p className="eyebrow">Ponto do atendimento</p><h2>Localização</h2></div></div>
         <IssueMap reports={[report]} selectedId={report.id} className="map-detail" />
       </section>
-      <section className="detail-section field-actions-section">
+      <section id="field-actions" className="detail-section field-actions-section">
         <div className="detail-section-heading"><div><p className="eyebrow">Próxima ação</p><h2>Atualizar ordem</h2></div><Wrench size={21} /></div>
         {report.status === 'Aberto' ? (
           <div className="field-action-content">

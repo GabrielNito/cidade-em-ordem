@@ -70,7 +70,7 @@ function Sidebar({ role }: { role: UserRole }) {
       </nav>
       <div className="sidebar-footer">
         <span className="municipal-seal-placeholder"><Landmark size={17} /></span>
-        <span>Protótipo de demonstração</span>
+        <span>Prefeitura de Indaiatuba</span>
       </div>
     </aside>
   )
@@ -85,17 +85,18 @@ function Topbar({ role }: { role: UserRole }) {
   return (
     <header className="topbar">
       <div className="mobile-brand">
-        <NavLink to={copy.home} className="brand-inline">
-          <span className="brand-mark brand-mark-small brand-mark-logo"><img src="/image%208.png" alt="" /></span>
-          <span>Cidade em Ordem</span>
+        <NavLink to={copy.home} className="brand-inline" aria-label="Cidade em Ordem - Página inicial">
+          <span className="brand-mark brand-mark-small brand-mark-logo"><img src="/image%208.png" alt="Cidade em Ordem" /></span>
         </NavLink>
       </div>
       <div className="topbar-context">{copy.label}</div>
-      <NavLink to={profilePath} className={`topbar-user ${isProfile ? 'topbar-user-active' : ''}`} aria-label="Abrir perfil">
-        <span className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
-        <span className="topbar-user-name">{user.name.split(' ')[0]}</span>
-        <UserRound size={16} aria-hidden="true" />
-      </NavLink>
+      <div className="topbar-user-slot desktop-only-user">
+        <NavLink to={profilePath} className={`topbar-user ${isProfile ? 'topbar-user-active' : ''}`} aria-label="Abrir perfil">
+          <span className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
+          <span className="topbar-user-name">{user.name.split(' ')[0]}</span>
+          <UserRound size={16} aria-hidden="true" />
+        </NavLink>
+      </div>
     </header>
   )
 }

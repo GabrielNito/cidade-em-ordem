@@ -1,8 +1,9 @@
 'use client'
 
-import { Camera, ImagePlus, RefreshCw, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, RefreshCw, X } from 'lucide-react'
 import { useRef, type ChangeEvent } from 'react'
-import type { ReportCategory } from '../../types/domain'
+import { REPORT_CATEGORIES, type ReportCategory } from '../../types/domain'
+import { CategoryIcon } from '../ui/CategoryIcon'
 import { PhotoFrame } from '../ui/PhotoFrame'
 
 function fileToDataUrl(file: File) {
@@ -17,14 +18,18 @@ function fileToDataUrl(file: File) {
 export function ReportPhotoStep({
   photo,
   category,
+  categoryError,
   error,
+  onCategoryChange,
   onPhotoChange,
   onError,
   onRemove,
 }: {
   photo: string
-  category: ReportCategory
+  category: ReportCategory | ''
+  categoryError?: string
   error?: string
+  onCategoryChange: (category: ReportCategory) => void
   onPhotoChange: (photo: string) => void
   onError: (message: string) => void
   onRemove: () => void
@@ -58,14 +63,28 @@ export function ReportPhotoStep({
         <div>
           <p className="eyebrow">Etapa 2 de 3</p>
           <h1 id="photo-step-title">Mostre o problema</h1>
-          <p>Uma fotografia ajuda a equipe a entender a situação antes de chegar ao local.</p>
+          <p>Escolha o tipo do problema antes de enviar a fotografia.</p>
         </div>
+      </div>
+
+      <div className="guided-photo-category">
+        <span>Qual é o problema?</span>
+        <div className="guided-category-grid" role="radiogroup" aria-label="Categoria da ocorrência">
+          {REPORT_CATEGORIES.map((item) => (
+            <button key={item} type="button" role="radio" aria-checked={category === item} className={`guided-category-choice ${category === item ? 'guided-category-choice-selected' : ''}`} onClick={() => onCategoryChange(item)}>
+              <CategoryIcon category={item} size="sm" />
+              <span>{item}</span>
+              {category === item ? <Check size={16} aria-hidden="true" /> : null}
+            </button>
+          ))}
+        </div>
+        {categoryError ? <p className="form-error" role="alert">{categoryError}</p> : null}
       </div>
 
       <input ref={inputRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={handleChange} />
       {photo ? (
         <div className="guided-photo-preview-wrap">
-          <PhotoFrame src={photo} category={category} alt="Pré-visualização da fotografia da ocorrência" className="guided-photo-preview" />
+          <PhotoFrame src={photo} category={category || 'Buraco na via'} alt="Pré-visualização da fotografia da ocorrência" className="guided-photo-preview" />
           <div className="guided-photo-preview-actions">
             <button type="button" className="button-secondary" onClick={() => inputRef.current?.click()}><RefreshCw size={17} /> Trocar fotografia</button>
             <button type="button" className="text-button guided-photo-remove" onClick={clearPhoto}><X size={16} /> Remover</button>

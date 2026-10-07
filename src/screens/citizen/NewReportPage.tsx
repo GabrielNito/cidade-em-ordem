@@ -1,14 +1,15 @@
 'use client'
 
-import { ArrowLeft, Check, CircleAlert } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, Copy } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '../../navigation'
 import { LocationPicker, type LocationPickerState } from '../../components/reports/LocationPicker'
 import { ReportDetailsStep } from '../../components/reports/ReportDetailsStep'
 import { ReportPhotoStep } from '../../components/reports/ReportPhotoStep'
 import { useApp } from '../../context/AppContext'
-import type { GeoPoint, ReportCategory } from '../../types/domain'
+import type { GeoPoint, Report, ReportCategory } from '../../types/domain'
 import { findNearbyReports } from '../../utils/geo'
+import { formatDateTime } from '../../utils/report'
 
 type ReportStep = 'location' | 'photo' | 'details'
 
@@ -27,6 +28,7 @@ export function NewReportPage() {
   const [category, setCategory] = useState<ReportCategory | ''>('')
   const [description, setDescription] = useState('')
   const [photo, setPhoto] = useState('')
+  const [audio, setAudio] = useState<string | null>(null)
   const [location, setLocation] = useState<GeoPoint>()
   const [recenterPoint, setRecenterPoint] = useState<GeoPoint>()
   const [locationLabel, setLocationLabel] = useState('')
@@ -34,6 +36,8 @@ export function NewReportPage() {
   const [locationError, setLocationError] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createdReport, setCreatedReport] = useState<Report | null>(null)
+  const [copiedProtocol, setCopiedProtocol] = useState(false)
   const [nearbyDismissed, setNearbyDismissed] = useState(false)
   const [nearbyConfirmedId, setNearbyConfirmedId] = useState('')
   const [nearbyConfirmingId, setNearbyConfirmingId] = useState('')
@@ -91,10 +95,10 @@ export function NewReportPage() {
     chooseLocation(point, label ?? 'Endereço pesquisado')
   }, [chooseLocation])
 
-  const useDemoLocation = useCallback(() => {
+  const useSuggestedLocation = useCallback(() => {
     const point = { latitude: -23.1162, longitude: -47.2385 }
     setRecenterPoint(point)
-    chooseLocation(point, 'Ponto de demonstração')
+    chooseLocation(point, 'Ponto indicado no mapa')
   }, [chooseLocation])
 
   useEffect(() => {
@@ -146,6 +150,10 @@ export function NewReportPage() {
       setStep('photo')
       return
     }
+    if (!category) {
+      setErrors((current) => ({ ...current, category: 'Escolha o tipo do problema antes de continuar.' }))
+      return
+    }
     if (!photo) {
       setErrors((current) => ({ ...current, photo: 'Adicione uma fotografia para continuar.' }))
       return
@@ -175,12 +183,113 @@ export function NewReportPage() {
         address: locationLabel || 'Coordenadas do mapa',
         photo,
       })
-      navigate(`/app/mapa?selectedReportId=${encodeURIComponent(report.id)}`, { replace: true })
+      setCreatedReport(report)
     } catch {
       setErrors({ form: 'Não foi possível registrar a ocorrência. Tente novamente.' })
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (createdReport) {
+    return (
+      <div className="protocol-receipt-page" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
+        <div className="protocol-receipt-card">
+          <div className="protocol-receipt-badge" aria-hidden="true">
+            <span className="receipt-check-icon"><Check size={36} strokeWidth={2.6} /></span>
+          </div>
+
+          <div className="protocol-receipt-heading">
+            <span className="eyebrow">Prefeitura de Indaiatuba · Zeladoria</span>
+            <h1 id="receipt-title">Solicitação Registrada!</h1>
+            <p>Seu chamado foi protocolado e encaminhado para a equipe de atendimento.</p>
+          </div>
+
+          <div className="protocol-number-box">
+            <span className="protocol-number-label">Número do Protocolo</span>
+            <div className="protocol-number-row">
+              <strong className="protocol-number-value">{createdReport.protocol}</strong>
+              <button
+                type="button"
+                className="button-secondary protocol-copy-button"
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(createdReport.protocol).catch(() => {})
+                  }
+                  setCopiedProtocol(true)
+                  setTimeout(() => setCopiedProtocol(false), 2500)
+                }}
+                aria-label="Copiar número do protocolo"
+              >
+                {copiedProtocol ? <Check size={16} /> : <Copy size={16} />}
+                <span>{copiedProtocol ? 'Copiado!' : 'Copiar'}</span>
+              </button>
+            </div>
+            <small>Guarde este número para consultas e acompanhamento.</small>
+          </div>
+
+          <div className="protocol-receipt-summary">
+            <div className="protocol-receipt-row">
+              <span>Problema</span>
+              <strong>{createdReport.category}</strong>
+            </div>
+            <div className="protocol-receipt-row">
+              <span>Localização</span>
+              <strong>{createdReport.address || createdReport.region}</strong>
+            </div>
+            <div className="protocol-receipt-row">
+              <span>Data e horário</span>
+              <strong>{formatDateTime(createdReport.createdAt)}</strong>
+            </div>
+            <div className="protocol-receipt-row">
+              <span>Status inicial</span>
+              <span className="receipt-status-pill">Aberto · Na fila</span>
+            </div>
+            {audio ? (
+              <div className="protocol-receipt-row">
+                <span>Relato por voz</span>
+                <strong>Áudio gravado anexado</strong>
+              </div>
+            ) : null}
+          </div>
+
+          <p className="protocol-receipt-tip">
+            Você pode acompanhar cada etapa do serviço diretamente no mapa ou na aba <strong>Chamados</strong>.
+          </p>
+
+          <div className="protocol-receipt-actions">
+            <button
+              type="button"
+              className="button-primary protocol-action-primary"
+              onClick={() => navigate(`/app/mapa?selectedReportId=${encodeURIComponent(createdReport.id)}&created=1`)}
+            >
+              Ver chamado no mapa
+            </button>
+            <button
+              type="button"
+              className="button-secondary protocol-action-secondary"
+              onClick={() => navigate('/app/chamados')}
+            >
+              Ir para Meus Chamados
+            </button>
+            <button
+              type="button"
+              className="text-button protocol-action-reset"
+              onClick={() => {
+                setCreatedReport(null)
+                setStep('location')
+                setCategory('')
+                setDescription('')
+                setPhoto('')
+                setAudio(null)
+              }}
+            >
+              Registrar outra ocorrência
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -210,7 +319,7 @@ export function NewReportPage() {
             onLocationChange={handleSearchLocationChange}
             onMapCenterChange={handleMapCenterChange}
             onRequestLocation={requestLocation}
-            onUseDemoLocation={useDemoLocation}
+            onUseSuggestedLocation={useSuggestedLocation}
             onContinue={goNext}
           />
         ) : null}
@@ -219,8 +328,10 @@ export function NewReportPage() {
           <>
             <ReportPhotoStep
               photo={photo}
-              category={category || 'Buraco na via'}
+              category={category}
+              categoryError={errors.category}
               error={errors.photo}
+              onCategoryChange={(value) => { setCategory(value); setErrors((current) => ({ ...current, category: '' })) }}
               onPhotoChange={(value) => { setPhoto(value); setErrors((current) => ({ ...current, photo: '' })) }}
               onError={(message) => setErrors((current) => ({ ...current, photo: message }))}
               onRemove={() => setPhoto('')}
@@ -238,6 +349,7 @@ export function NewReportPage() {
               category={category}
               description={description}
               photo={photo}
+              audio={audio}
               location={location}
               locationLabel={locationLabel}
               errors={errors}
@@ -247,8 +359,8 @@ export function NewReportPage() {
               nearbyConfirmingId={nearbyConfirmingId}
               nearbyError={nearbyError}
               user={user}
-              onCategoryChange={(value) => { setCategory(value); setErrors((current) => ({ ...current, category: '' })) }}
               onDescriptionChange={(value) => { setDescription(value); setErrors((current) => ({ ...current, description: '' })) }}
+              onAudioChange={setAudio}
               onConfirmNearby={handleConfirmNearby}
               onViewNearby={(id) => navigate(`/app/mapa?selectedReportId=${encodeURIComponent(id)}`)}
               onDismissNearby={() => setNearbyDismissed(true)}

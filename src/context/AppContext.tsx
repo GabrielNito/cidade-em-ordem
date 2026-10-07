@@ -68,6 +68,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSession(getStoredSession())
     refreshReports()
+    const largeText = window.localStorage.getItem('cidade-em-ordem:large-text') === 'true'
+    document.documentElement.dataset.readingSize = largeText ? 'large' : 'default'
     setIsHydrated(true)
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'cidade-em-ordem:reports:v1') refreshReports()

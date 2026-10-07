@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, ShieldCheck } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from '../navigation'
 import { useApp } from '../context/AppContext'
@@ -29,11 +29,10 @@ export function LoginPage() {
           <span>Prefeitura de Indaiatuba</span>
         </div>
         <div className="login-brand-area">
-          <div className="service-wordmark" aria-label="Cidade em Ordem">
-            <span className="service-wordmark-line" aria-hidden="true" />
-            <span><strong>CIDADE</strong><em>EM ORDEM</em></span>
+          <div className="login-logo-wrap" aria-label="Cidade em Ordem">
+            <img src="/image%208.png" alt="Cidade em Ordem - Indaiatuba" className="login-logo-img" />
           </div>
-          <p className="login-service-description">Serviços de zeladoria urbana em Indaiatuba</p>
+          <p className="login-service-description"><strong>Bem-vinda ao Cidade em Ordem.</strong> Serviços de zeladoria urbana em Indaiatuba.</p>
         </div>
         <div className="login-actions">
           <button className="gov-button" onClick={handleLogin} disabled={isLoading}>
@@ -41,11 +40,7 @@ export function LoginPage() {
             <span>{isLoading ? 'Conectando...' : <>Entrar com <strong>gov.br</strong></>}</span>
           </button>
           {error ? <p className="form-error standalone-error" role="alert">{error}</p> : null}
-          <p className="login-support">Clique aqui para entrar utilizando sua conta <strong>gov.br</strong></p>
-          <div className="login-demo-note">
-            <ShieldCheck size={15} aria-hidden="true" />
-            <span>Acesso simulado para demonstração. Nenhum CPF ou senha é solicitado.</span>
-          </div>
+          <p className="login-support">Entre com sua conta <strong>gov.br</strong> para registrar e acompanhar suas solicitações.</p>
         </div>
       </section>
     </main>
