@@ -1,12 +1,15 @@
 'use client'
 
 import {
+  AlertTriangle,
   Bell,
+  Calendar,
   CheckCheck,
   CheckCircle2,
   ChevronRight,
   Clock,
   Info,
+  MapPin,
   ShieldAlert,
   Trash2,
   Users,
@@ -17,6 +20,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '../../navigation'
 import { useApp } from '../../context/AppContext'
 import type { AppNotification, NotificationType } from '../../types/domain'
+import { formatInterventionDateRange } from '../../utils/intervention'
+
 
 interface NotificationDrawerProps {
   isOpen: boolean
@@ -110,7 +115,10 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
 
   const handleNotificationClick = (item: AppNotification) => {
     markNotificationAsRead(item.id)
-    if (item.reportId) {
+    if (item.interventionId) {
+      onClose()
+      navigate(`/app/mapa?intervencao=${item.interventionId}`)
+    } else if (item.reportId) {
       onClose()
       navigate(`/app/chamados/${item.reportId}`)
     }
@@ -238,11 +246,38 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
                     <h4 className="notif-card-title">{item.title}</h4>
                     <p className="notif-card-message">{item.message}</p>
 
+                    {item.interventionId ? (
+                      <div className="notif-intervention-preview">
+                        {item.affectedLocation ? (
+                          <div className="notif-preview-row">
+                            <MapPin size={13} aria-hidden="true" />
+                            <span><strong>Trecho:</strong> {item.affectedLocation}</span>
+                          </div>
+                        ) : null}
+                        {item.startsAt && item.endsAt ? (
+                          <div className="notif-preview-row">
+                            <Calendar size={13} aria-hidden="true" />
+                            <span><strong>Previsão:</strong> {formatInterventionDateRange(item.startsAt, item.endsAt)}</span>
+                          </div>
+                        ) : null}
+                        {item.impact ? (
+                          <div className="notif-preview-row">
+                            <AlertTriangle size={13} aria-hidden="true" />
+                            <span><strong>Impacto:</strong> {item.impact}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className="notif-card-footer">
                       {item.protocol ? (
                         <span className="notif-protocol-tag">Protocolo: {item.protocol}</span>
                       ) : <span />}
-                      {item.reportId ? (
+                      {item.interventionId ? (
+                        <span className="notif-card-link notif-card-link-intervention">
+                          Ver trecho no mapa <ChevronRight size={14} />
+                        </span>
+                      ) : item.reportId ? (
                         <span className="notif-card-link">
                           Ver detalhes <ChevronRight size={14} />
                         </span>

@@ -75,6 +75,70 @@ export interface AppNotification {
   message: string
   protocol?: string
   reportId?: string
+  interventionId?: string
+  affectedLocation?: string
+  startsAt?: string
+  endsAt?: string
+  impact?: InterventionImpact
   read: boolean
   createdAt: string
 }
+
+export const INTERVENTION_STATUSES = [
+  'Programada',
+  'Em andamento',
+  'Encerrada',
+  'Cancelada',
+] as const
+export type InterventionStatus = (typeof INTERVENTION_STATUSES)[number]
+
+export const INTERVENTION_TYPES = [
+  'Manutenção viária',
+  'Interdição',
+  'Sinalização',
+  'Infraestrutura',
+  'Outros',
+] as const
+export type InterventionType = (typeof INTERVENTION_TYPES)[number]
+
+export const INTERVENTION_IMPACTS = [
+  'Interdição total',
+  'Interdição parcial',
+  'Restrição de acesso',
+  'Possível lentidão',
+] as const
+export type InterventionImpact = (typeof INTERVENTION_IMPACTS)[number]
+
+export interface ScheduledIntervention {
+  id: string
+  title: string
+  description: string
+  type: InterventionType
+  affectedLocation: string
+  geometry: GeoPoint[]
+  startsAt: string
+  endsAt: string
+  impact: InterventionImpact
+  guidance?: string
+  status: InterventionStatus
+  createdAt: string
+  updatedAt: string
+  createdBy?: string
+}
+
+export interface CreateInterventionInput {
+  title: string
+  description: string
+  type: InterventionType
+  affectedLocation: string
+  geometry: GeoPoint[]
+  startsAt: string
+  endsAt: string
+  impact: InterventionImpact
+  guidance?: string
+}
+
+export type UpdateInterventionInput = Partial<CreateInterventionInput> & {
+  status?: InterventionStatus
+}
+

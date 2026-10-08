@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Cone,
   MapPin,
   MapPinned,
   Plus,
@@ -32,6 +33,7 @@ import { averageServiceDuration } from '../../services/reportRepository'
 import { categoryStyles, formatCount, formatDuration, formatShortDate } from '../../utils/report'
 import { CREW_MEMBERS } from '../../data/crew'
 import { calculateRouteDistanceKm, fetchStreetRoute, optimizeRouteOrder } from '../../utils/geo'
+import { InterventionManagementSection } from '../../components/interventions/InterventionManagementSection'
 
 type FilterValue = 'Todos' | ReportStatus
 
@@ -75,8 +77,8 @@ const CREW_EQUIPMENT: Record<string, { vehicle: string; radio: string }> = {
 }
 
 export function ManagementDashboardPage() {
-  const { reports, assignReport, createReport } = useApp()
-  const [activeTab, setActiveTab] = useState<'visao-geral' | 'rotas' | 'equipes'>('visao-geral')
+  const { reports, interventions, assignReport, createReport } = useApp()
+  const [activeTab, setActiveTab] = useState<'visao-geral' | 'rotas' | 'intervencoes' | 'equipes'>('visao-geral')
 
   // Filters for Map view
   const [statusFilter, setStatusFilter] = useState<FilterValue>('Todos')
@@ -400,6 +402,16 @@ export function ManagementDashboardPage() {
         <button
           type="button"
           role="tab"
+          aria-selected={activeTab === 'intervencoes'}
+          className={`management-tab ${activeTab === 'intervencoes' ? 'management-tab-active' : ''}`}
+          onClick={() => setActiveTab('intervencoes')}
+        >
+          <Cone size={17} />
+          <span>Intervenções Programadas ({interventions.length})</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={activeTab === 'equipes'}
           className={`management-tab ${activeTab === 'equipes' ? 'management-tab-active' : ''}`}
           onClick={() => setActiveTab('equipes')}
@@ -539,6 +551,8 @@ export function ManagementDashboardPage() {
                 reports={filteredReports}
                 selectedId={selected?.id}
                 onSelect={setSelected}
+                interventions={interventions}
+                showInterventionsLayer={true}
                 className="map-dashboard"
               />
             </div>
@@ -898,6 +912,9 @@ export function ManagementDashboardPage() {
           </div>
         </section>
       )}
+
+      {/* TAB: INTERVENÇÕES PROGRAMADAS & OBRAS */}
+      {activeTab === 'intervencoes' && <InterventionManagementSection />}
 
       {/* TAB 3: EQUIPES & COLABORADORES */}
       {activeTab === 'equipes' && (

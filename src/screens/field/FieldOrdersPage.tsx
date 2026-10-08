@@ -40,7 +40,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export function FieldOrdersPage() {
-  const { reports, startReport, finishReport } = useApp()
+  const { reports, interventions, startReport, finishReport } = useApp()
   const [viewMode, setViewMode] = useState<'lista' | 'rota'>('lista')
   const [filter, setFilter] = useState<(typeof filters)[number]>('Todos')
   const [activeStopIndex, setActiveStopIndex] = useState(0)
@@ -272,6 +272,8 @@ export function FieldOrdersPage() {
             <IssueMap
               reports={routeOrders}
               routePoints={routeOrders}
+              interventions={interventions}
+              showInterventionsLayer={true}
               selectedId={currentStop?.id}
               onSelect={(report) => {
                 const index = routeOrders.findIndex((item) => item.id === report.id)

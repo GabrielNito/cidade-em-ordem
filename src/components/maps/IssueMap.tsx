@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import type { GeoPoint, Report } from '../../types/domain'
+import type { GeoPoint, Report, ScheduledIntervention } from '../../types/domain'
 
 export type IssueMapProps = {
   reports: Report[]
@@ -16,6 +16,14 @@ export type IssueMapProps = {
   className?: string
   routePoints?: Report[]
   onRouteToggle?: (report: Report) => void
+  interventions?: ScheduledIntervention[]
+  selectedInterventionId?: string
+  onSelectIntervention?: (intervention: ScheduledIntervention) => void
+  showInterventionsLayer?: boolean
+  showReportsLayer?: boolean
+  interactivePoints?: GeoPoint[]
+  onAddInteractivePoint?: (point: GeoPoint) => void
+  isInteractiveDrawing?: boolean
 }
 
 const IssueMapClient = dynamic<IssueMapProps>(

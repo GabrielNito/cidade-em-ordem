@@ -2,6 +2,32 @@ import type { AppNotification } from '../types/domain'
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
+    id: 'notif-intervention-1',
+    type: 'OFFICIAL_ALERT',
+    title: 'Intervenção programada: Av. Conceição',
+    message: 'Interdição parcial programada para manutenção no pavimento. Trânsito em meia pista com previsão matutina.',
+    interventionId: 'intervention-1',
+    affectedLocation: 'Av. Conceição, entre Rua dos Indaiás e Av. Presidente Vargas',
+    startsAt: '2026-10-08T08:00:00-03:00',
+    endsAt: '2026-10-08T12:00:00-03:00',
+    impact: 'Interdição parcial',
+    read: false,
+    createdAt: '2026-10-06T14:00:00-03:00',
+  },
+  {
+    id: 'notif-intervention-2',
+    type: 'OFFICIAL_ALERT',
+    title: 'Obra em andamento: Marginal do Parque Ecológico',
+    message: 'Recapeamento asfáltico contínuo na Av. Eng. Fábio Roberto Barnabé com maquinário na via.',
+    interventionId: 'intervention-2',
+    affectedLocation: 'Av. Eng. Fábio Roberto Barnabé, trecho Parque Ecológico',
+    startsAt: '2026-10-07T07:30:00-03:00',
+    endsAt: '2026-10-07T18:00:00-03:00',
+    impact: 'Restrição de acesso',
+    read: false,
+    createdAt: '2026-10-07T07:30:00-03:00',
+  },
+  {
     id: 'notif-1',
     type: 'STATUS_UPDATE',
     title: 'Ordem de serviço iniciada',

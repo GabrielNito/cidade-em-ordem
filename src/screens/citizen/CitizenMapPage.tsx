@@ -1,16 +1,18 @@
 'use client'
 
-import { List, LocateFixed, X } from 'lucide-react'
+import { ChevronDown, List, LocateFixed, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '../../navigation'
 import { IssueMap } from '../../components/maps/IssueMap'
 import { MapFilterAccordion, type MapFilterOption } from '../../components/maps/MapFilterAccordion'
 import { OccurrenceDrawer } from '../../components/maps/OccurrenceDrawer'
+import { InterventionDrawer } from '../../components/interventions/InterventionDrawer'
 import { CategoryIcon } from '../../components/ui/CategoryIcon'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useApp } from '../../context/AppContext'
 import { REPORT_CATEGORIES, REPORT_STATUSES, type ReportCategory, type ReportStatus } from '../../types/domain'
 import type { GeoPoint } from '../../types/domain'
+
 
 type FilterValue<T> = T | 'Todos'
 
@@ -25,12 +27,15 @@ const statusOptions: readonly MapFilterOption<FilterValue<ReportStatus>>[] = [
 ]
 
 export function CitizenMapPage() {
-  const { reports, user, role, confirmReport } = useApp()
+  const { reports, interventions, user, role, confirmReport } = useApp()
   const navigate = useNavigate()
   const [categoryFilter, setCategoryFilter] = useState<FilterValue<ReportCategory>>('Todos')
   const [statusFilter, setStatusFilter] = useState<FilterValue<ReportStatus>>('Todos')
-  const [openFilter, setOpenFilter] = useState<'category' | 'status' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'category' | 'status' | 'layers' | null>(null)
+  const [showReportsLayer, setShowReportsLayer] = useState(true)
+  const [showInterventionsLayer, setShowInterventionsLayer] = useState(true)
   const [selectedId, setSelectedId] = useState<string>()
+  const [selectedInterventionId, setSelectedInterventionId] = useState<string>()
   const [userLocation, setUserLocation] = useState<GeoPoint>()
   const [isLocating, setIsLocating] = useState(false)
   const [locationError, setLocationError] = useState('')
@@ -45,18 +50,32 @@ export function CitizenMapPage() {
   }), [categoryFilter, reports, statusFilter])
 
   const selectedReport = filteredReports.find((report) => report.id === selectedId)
+  const selectedIntervention = interventions.find((item) => item.id === selectedInterventionId)
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
+    const interventionParam = searchParams.get('intervencao') || searchParams.get('interventionId')
+    if (interventionParam) {
+      setSelectedInterventionId(interventionParam)
+      setSelectedId(undefined)
+      const found = interventions.find((i) => i.id === interventionParam)
+      if (found && found.geometry.length > 0) {
+        setUserLocation(found.geometry[0])
+      }
+      navigate('/app/mapa', { replace: true })
+      return
+    }
+
     const selectedReportId = searchParams.get('selectedReportId')
     if (!selectedReportId) return
     setSelectedId(selectedReportId)
+    setSelectedInterventionId(undefined)
     if (searchParams.get('created') === '1') {
       const createdReport = reports.find((report) => report.id === selectedReportId)
       setExperienceMessage(`Solicitação enviada${createdReport ? ` · ${createdReport.protocol}` : ''}. Você pode acompanhar cada atualização por aqui.`)
     }
     navigate('/app/mapa', { replace: true })
-  }, [navigate, reports])
+  }, [interventions, navigate, reports])
 
   useEffect(() => {
     if (selectedId && !selectedReport) {
@@ -105,6 +124,50 @@ export function CitizenMapPage() {
           onToggle={() => setOpenFilter((current) => current === 'status' ? null : 'status')}
           onChange={setStatusFilter}
         />
+
+        {/* Camadas do Mapa */}
+        <div className={`map-filter-control ${openFilter === 'layers' ? 'map-filter-control-open' : ''}`}>
+          <button
+            type="button"
+            className="map-filter-trigger"
+            aria-expanded={openFilter === 'layers'}
+            onClick={() => setOpenFilter((current) => current === 'layers' ? null : 'layers')}
+            aria-label="Controle de camadas do mapa"
+          >
+            <span className="map-filter-trigger-copy">
+              <span className="map-filter-trigger-label">Camadas</span>
+              <strong>
+                {showReportsLayer && showInterventionsLayer
+                  ? 'Todas'
+                  : showInterventionsLayer
+                    ? 'Intervenções'
+                    : 'Ocorrências'}
+              </strong>
+            </span>
+            <ChevronDown className="map-filter-trigger-chevron" size={15} aria-hidden="true" />
+          </button>
+          <div className="map-filter-options-shell">
+            <div className="map-filter-options p-2" role="group" aria-label="Camadas visíveis no mapa">
+              <label className="map-layer-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={showReportsLayer}
+                  onChange={(e) => setShowReportsLayer(e.target.checked)}
+                />
+                <span>Ocorrências ({filteredReports.length})</span>
+              </label>
+              <label className="map-layer-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={showInterventionsLayer}
+                  onChange={(e) => setShowInterventionsLayer(e.target.checked)}
+                />
+                <span>Intervenções ({interventions.length})</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <button type="button" className="map-locate-button" onClick={handleLocate} disabled={isLocating} aria-label="Centralizar em minha localização">
           {isLocating ? <span className="button-spinner" aria-hidden="true" /> : <LocateFixed size={18} />}
           <span className="map-locate-label">Minha localização</span>
@@ -115,7 +178,7 @@ export function CitizenMapPage() {
         {!isHintDismissed ? (
           <div className="map-experience-hint">
             <div className="map-experience-hint-body">
-              <span>Toque em um marcador para ver os detalhes.</span>
+              <span>Toque em um marcador ou trecho para ver os detalhes.</span>
               <button type="button" className="map-list-toggle" onClick={() => setIsListOpen(true)}>
                 <List size={14} /> Ver em lista
               </button>
@@ -134,7 +197,18 @@ export function CitizenMapPage() {
       <IssueMap
         reports={filteredReports}
         selectedId={selectedReport?.id}
-        onSelect={(report) => setSelectedId(report.id)}
+        onSelect={(report) => {
+          setSelectedInterventionId(undefined)
+          setSelectedId(report.id)
+        }}
+        interventions={interventions}
+        selectedInterventionId={selectedInterventionId}
+        onSelectIntervention={(intervention) => {
+          setSelectedId(undefined)
+          setSelectedInterventionId(intervention.id)
+        }}
+        showReportsLayer={showReportsLayer}
+        showInterventionsLayer={showInterventionsLayer}
         focusPoint={userLocation}
         zoom={15}
         scrollWheelZoom
@@ -157,6 +231,13 @@ export function CitizenMapPage() {
           onClose={() => { setExperienceMessage(''); setSelectedId(undefined) }}
           onViewDetails={() => navigate(`/app/chamados/${selectedReport.id}`)}
           notice={experienceMessage || undefined}
+        />
+      ) : null}
+      {selectedIntervention ? (
+        <InterventionDrawer
+          intervention={selectedIntervention}
+          role={role}
+          onClose={() => setSelectedInterventionId(undefined)}
         />
       ) : null}
     </div>

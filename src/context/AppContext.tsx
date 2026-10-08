@@ -2,7 +2,18 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { DEMO_CITIZEN } from '../data/mockReports'
 import { INITIAL_NOTIFICATIONS } from '../data/mockNotifications'
 import { reportRepository } from '../services/reportRepository'
-import type { AppNotification, CreateReportInput, Report, UserRole } from '../types/domain'
+import { interventionRepository, INTERVENTION_STORAGE_KEY } from '../services/interventionRepository'
+import type {
+  AppNotification,
+  CreateInterventionInput,
+  CreateReportInput,
+  InterventionStatus,
+  Report,
+  ScheduledIntervention,
+  UpdateInterventionInput,
+  UserRole,
+} from '../types/domain'
+import { formatInterventionDateRange } from '../utils/intervention'
 
 const SESSION_STORAGE_KEY = 'cidade-em-ordem:session:v1'
 const NOTIFICATIONS_STORAGE_KEY = 'cidade-em-ordem:notifications:v1'
@@ -18,6 +29,7 @@ interface AppContextValue {
   user: typeof DEMO_CITIZEN
   role: UserRole
   reports: Report[]
+  interventions: ScheduledIntervention[]
   isLoading: boolean
   notifications: AppNotification[]
   unreadNotificationsCount: number
@@ -34,6 +46,11 @@ interface AppContextValue {
   startReport: (id: string) => Report
   finishReport: (id: string, completionPhoto: string) => Report
   refreshReports: () => void
+  createIntervention: (input: CreateInterventionInput) => ScheduledIntervention
+  updateIntervention: (id: string, input: UpdateInterventionInput) => ScheduledIntervention
+  changeInterventionStatus: (id: string, status: InterventionStatus) => ScheduledIntervention
+  cancelIntervention: (id: string, guidanceUpdate?: string) => ScheduledIntervention
+  refreshInterventions: () => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -85,22 +102,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Keep the server render and the browser's first render identical. The
   // repository reads localStorage only after the client has hydrated.
   const [reports, setReports] = useState<Report[]>([])
+  const [interventions, setInterventions] = useState<ScheduledIntervention[]>([])
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
 
   const refreshReports = () => setReports(reportRepository.list())
+  const refreshInterventions = () => setInterventions(interventionRepository.list())
   const refreshNotifications = () => setNotifications(getStoredNotifications())
 
   useEffect(() => {
     setSession(getStoredSession())
     refreshReports()
+    refreshInterventions()
     refreshNotifications()
     const largeText = window.localStorage.getItem('cidade-em-ordem:large-text') === 'true'
     document.documentElement.dataset.readingSize = largeText ? 'large' : 'default'
     setIsHydrated(true)
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'cidade-em-ordem:reports:v1') refreshReports()
+      if (event.key === INTERVENTION_STORAGE_KEY) refreshInterventions()
       if (event.key === NOTIFICATIONS_STORAGE_KEY) refreshNotifications()
       if (event.key === SESSION_STORAGE_KEY) setSession(getStoredSession())
     }
@@ -213,6 +234,115 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return updated
   }
 
+  const createIntervention = (input: CreateInterventionInput) => {
+    if (!session || session.role !== 'MANAGER') {
+      throw new Error('Somente gestores municipais podem cadastrar intervenções programadas.')
+    }
+    const created = interventionRepository.create(input, session.user.name)
+    refreshInterventions()
+
+    const notifId = `notif-intervention-${created.id}`
+    const newNotif: AppNotification = {
+      id: notifId,
+      type: 'OFFICIAL_ALERT',
+      title: `Intervenção programada: ${created.title}`,
+      message: `${created.type} no trecho ${created.affectedLocation}. Previsão: ${formatInterventionDateRange(created.startsAt, created.endsAt)}.`,
+      interventionId: created.id,
+      affectedLocation: created.affectedLocation,
+      startsAt: created.startsAt,
+      endsAt: created.endsAt,
+      impact: created.impact,
+      read: false,
+      createdAt: new Date().toISOString(),
+    }
+    setNotifications((prev) => {
+      const filtered = prev.filter((n) => n.interventionId !== created.id && n.id !== notifId)
+      const updated = [newNotif, ...filtered]
+      saveNotifications(updated)
+      return updated
+    })
+
+    return created
+  }
+
+  const updateIntervention = (id: string, input: UpdateInterventionInput) => {
+    if (!session || session.role !== 'MANAGER') {
+      throw new Error('Somente gestores municipais podem editar intervenções programadas.')
+    }
+    const updated = interventionRepository.update(id, input)
+    refreshInterventions()
+
+    setNotifications((prev) => {
+      const existing = prev.find((n) => n.interventionId === updated.id)
+      const notifId = existing?.id ?? `notif-intervention-${updated.id}`
+      const isCancelled = updated.status === 'Cancelada'
+      const isEnded = updated.status === 'Encerrada'
+      const notif: AppNotification = {
+        id: notifId,
+        type: 'OFFICIAL_ALERT',
+        title: isCancelled
+          ? `Cancelada: ${updated.title}`
+          : isEnded
+            ? `Concluída: ${updated.title}`
+            : `Atualização: ${updated.title}`,
+        message: isCancelled
+          ? `A intervenção programada no trecho ${updated.affectedLocation} foi cancelada pela Prefeitura. Trecho liberado para circulação.`
+          : isEnded
+            ? `A intervenção no trecho ${updated.affectedLocation} foi concluída com sucesso. Via liberada.`
+            : `${updated.type} em ${updated.affectedLocation}. Previsão atualizada: ${formatInterventionDateRange(updated.startsAt, updated.endsAt)}.`,
+        interventionId: updated.id,
+        affectedLocation: updated.affectedLocation,
+        startsAt: updated.startsAt,
+        endsAt: updated.endsAt,
+        impact: updated.impact,
+        read: false,
+        createdAt: new Date().toISOString(),
+      }
+      const filtered = prev.filter((n) => n.interventionId !== updated.id)
+      const nextList = [notif, ...filtered]
+      saveNotifications(nextList)
+      return nextList
+    })
+
+    return updated
+  }
+
+  const changeInterventionStatus = (id: string, status: InterventionStatus) => {
+    return updateIntervention(id, { status })
+  }
+
+  const cancelIntervention = (id: string, guidanceUpdate?: string) => {
+    if (!session || session.role !== 'MANAGER') {
+      throw new Error('Somente gestores municipais podem cancelar intervenções programadas.')
+    }
+    const cancelled = interventionRepository.cancel(id, guidanceUpdate)
+    refreshInterventions()
+
+    setNotifications((prev) => {
+      const existing = prev.find((n) => n.interventionId === cancelled.id)
+      const notifId = existing?.id ?? `notif-intervention-${cancelled.id}`
+      const notif: AppNotification = {
+        id: notifId,
+        type: 'OFFICIAL_ALERT',
+        title: `Cancelada: ${cancelled.title}`,
+        message: `A intervenção programada no trecho ${cancelled.affectedLocation} foi cancelada pela Prefeitura. Trecho liberado para circulação.${cancelled.guidance ? ` Observação: ${cancelled.guidance}` : ''}`,
+        interventionId: cancelled.id,
+        affectedLocation: cancelled.affectedLocation,
+        startsAt: cancelled.startsAt,
+        endsAt: cancelled.endsAt,
+        impact: cancelled.impact,
+        read: false,
+        createdAt: new Date().toISOString(),
+      }
+      const filtered = prev.filter((n) => n.interventionId !== cancelled.id)
+      const nextList = [notif, ...filtered]
+      saveNotifications(nextList)
+      return nextList
+    })
+
+    return cancelled
+  }
+
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length
 
   const value: AppContextValue = {
@@ -221,6 +351,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? DEMO_CITIZEN,
     role: session?.role ?? 'CITIZEN',
     reports,
+    interventions,
     isLoading,
     notifications,
     unreadNotificationsCount,
@@ -237,6 +368,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startReport,
     finishReport,
     refreshReports,
+    createIntervention,
+    updateIntervention,
+    changeInterventionStatus,
+    cancelIntervention,
+    refreshInterventions,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

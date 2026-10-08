@@ -4,9 +4,10 @@ import { divIcon } from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { MapPin } from 'lucide-react'
-import type { GeoPoint, Report, ReportCategory } from '../../types/domain'
+import type { GeoPoint, Report, ReportCategory, ScheduledIntervention } from '../../types/domain'
 import { statusStyles } from '../../utils/report'
 import { fetchStreetRoute } from '../../utils/geo'
+import { interventionStatusStyles } from '../../utils/intervention'
 
 const INDAIATUBA_CENTER: [number, number] = [-23.0903, -47.2181]
 
@@ -42,12 +43,55 @@ function createMarkerIcon(report: Report, selected: boolean, routeIndex?: number
   })
 }
 
+function createInterventionMarkerIcon(intervention: ScheduledIntervention, selected: boolean) {
+  const isCancelled = intervention.status === 'Cancelada'
+  const isFinished = intervention.status === 'Encerrada'
+  const isOngoing = intervention.status === 'Em andamento'
+  const color = isCancelled
+    ? '#64748b'
+    : isFinished
+      ? '#16a34a'
+      : isOngoing
+        ? '#ea580c'
+        : '#d97706'
+
+  const statusShort = isOngoing ? 'OBRA' : isCancelled ? 'CANCELADA' : isFinished ? 'LIBERADA' : 'AVISO'
+
+  return divIcon({
+    className: 'map-intervention-marker-host',
+    iconSize: [44, 46],
+    iconAnchor: [22, 23],
+    popupAnchor: [0, -22],
+    html: `<span class="map-intervention-marker ${selected ? 'map-intervention-marker-selected' : ''}" data-intervention-id="${intervention.id}" style="--marker-color:${color}" role="button" tabindex="0" aria-label="Intervenção municipal: ${intervention.title}, ${intervention.impact}, ${intervention.status}">
+      <span class="map-intervention-marker-core">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m2 22 10-20 10 20Z"/>
+          <path d="M6 14h12"/>
+          <path d="M8 18h8"/>
+        </svg>
+      </span>
+      <span class="map-intervention-marker-badge">${statusShort}</span>
+    </span>`,
+  })
+}
+
+function createDraftPointIcon(index: number) {
+  return divIcon({
+    className: 'map-draft-point-host',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    html: `<span class="map-draft-point-pin">${index + 1}</span>`,
+  })
+}
+
 function MapViewport({
   selectedReport,
+  selectedIntervention,
   focusPoint,
   onCenterChange,
 }: {
   selectedReport?: Report
+  selectedIntervention?: ScheduledIntervention
   focusPoint?: GeoPoint
   onCenterChange?: (point: GeoPoint) => void
 }) {
@@ -68,11 +112,35 @@ function MapViewport({
   }, [map, selectedReport])
 
   useEffect(() => {
+    if (selectedIntervention && selectedIntervention.geometry.length > 0) {
+      const target = selectedIntervention.geometry[0]
+      map.flyTo([target.latitude, target.longitude], Math.max(map.getZoom(), 15), { duration: 0.45 })
+    }
+  }, [map, selectedIntervention])
+
+  useEffect(() => {
     if (focusPoint) {
       map.flyTo([focusPoint.latitude, focusPoint.longitude], Math.max(map.getZoom(), 15), { duration: 0.45 })
     }
   }, [focusPoint, map])
 
+  return null
+}
+
+function MapInteractiveClickHandler({
+  isInteractiveDrawing,
+  onAddInteractivePoint,
+}: {
+  isInteractiveDrawing?: boolean
+  onAddInteractivePoint?: (point: GeoPoint) => void
+}) {
+  useMapEvents({
+    click: (e) => {
+      if (isInteractiveDrawing && onAddInteractivePoint) {
+        onAddInteractivePoint({ latitude: e.latlng.lat, longitude: e.latlng.lng })
+      }
+    },
+  })
   return null
 }
 
@@ -89,6 +157,14 @@ export function IssueMapClient({
   className = '',
   routePoints,
   onRouteToggle,
+  interventions = [],
+  selectedInterventionId,
+  onSelectIntervention,
+  showInterventionsLayer = true,
+  showReportsLayer = true,
+  interactivePoints = [],
+  onAddInteractivePoint,
+  isInteractiveDrawing = false,
 }: {
   reports: Report[]
   selectedId?: string
@@ -102,12 +178,21 @@ export function IssueMapClient({
   className?: string
   routePoints?: Report[]
   onRouteToggle?: (report: Report) => void
+  interventions?: ScheduledIntervention[]
+  selectedInterventionId?: string
+  onSelectIntervention?: (intervention: ScheduledIntervention) => void
+  showInterventionsLayer?: boolean
+  showReportsLayer?: boolean
+  interactivePoints?: GeoPoint[]
+  onAddInteractivePoint?: (point: GeoPoint) => void
+  isInteractiveDrawing?: boolean
 }) {
   const selectedReport = reports.find((report) => report.id === selectedId)
+  const selectedIntervention = interventions.find((item) => item.id === selectedInterventionId)
   const mapRootRef = useRef<HTMLDivElement>(null)
   const [streetRouteCoords, setStreetRouteCoords] = useState<[number, number][]>([])
 
-  // Fetch real road-network geometry following streets
+  // Fetch real road-network geometry following streets for crew route
   useEffect(() => {
     if (!routePoints || routePoints.length < 2) {
       setStreetRouteCoords([])
@@ -129,33 +214,48 @@ export function IssueMapClient({
   const polylinePositions =
     streetRouteCoords.length > 0
       ? streetRouteCoords
-      : (routePoints && routePoints.length > 1
-          ? routePoints.map((r) => [r.latitude, r.longitude] as [number, number])
-          : [])
+      : routePoints && routePoints.length > 1
+        ? routePoints.map((r) => [r.latitude, r.longitude] as [number, number])
+        : []
 
   useEffect(() => {
     const root = mapRootRef.current
     if (!root) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== ' ') return
-      const marker = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.map-report-marker') : null
-      const report = marker?.dataset.reportId ? reports.find((item) => item.id === marker.dataset.reportId) : undefined
-      if (!report) return
-      event.preventDefault()
-      if (onRouteToggle) {
-        onRouteToggle(report)
-      } else {
-        onSelect?.(report)
+
+      // Occurrence marker selection
+      const reportMarker = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.map-report-marker') : null
+      const report = reportMarker?.dataset.reportId ? reports.find((item) => item.id === reportMarker.dataset.reportId) : undefined
+      if (report) {
+        event.preventDefault()
+        if (onRouteToggle) {
+          onRouteToggle(report)
+        } else {
+          onSelect?.(report)
+        }
+        return
+      }
+
+      // Intervention marker selection
+      const intervMarker = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.map-intervention-marker') : null
+      const intervention = intervMarker?.dataset.interventionId ? interventions.find((i) => i.id === intervMarker.dataset.interventionId) : undefined
+      if (intervention) {
+        event.preventDefault()
+        onSelectIntervention?.(intervention)
       }
     }
     root.addEventListener('keydown', handleKeyDown)
     return () => root.removeEventListener('keydown', handleKeyDown)
-  }, [onRouteToggle, onSelect, reports])
+  }, [interventions, onRouteToggle, onSelect, onSelectIntervention, reports])
 
   return (
     <div ref={mapRootRef} className={`issue-map ${className}`}>
       <MapContainer
-        center={[initialCenter?.latitude ?? focusPoint?.latitude ?? INDAIATUBA_CENTER[0], initialCenter?.longitude ?? focusPoint?.longitude ?? INDAIATUBA_CENTER[1]]}
+        center={[
+          initialCenter?.latitude ?? focusPoint?.latitude ?? INDAIATUBA_CENTER[0],
+          initialCenter?.longitude ?? focusPoint?.longitude ?? INDAIATUBA_CENTER[1],
+        ]}
         zoom={zoom}
         scrollWheelZoom={scrollWheelZoom}
         className="h-full w-full"
@@ -165,7 +265,18 @@ export function IssueMapClient({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           maxZoom={20}
         />
-        <MapViewport selectedReport={selectedReport} focusPoint={focusPoint} onCenterChange={onCenterChange} />
+        <MapViewport
+          selectedReport={selectedReport}
+          selectedIntervention={selectedIntervention}
+          focusPoint={focusPoint}
+          onCenterChange={onCenterChange}
+        />
+        <MapInteractiveClickHandler
+          isInteractiveDrawing={isInteractiveDrawing}
+          onAddInteractivePoint={onAddInteractivePoint}
+        />
+
+        {/* Tracing of Field Route (Crew Work Orders) */}
         {polylinePositions.length > 1 ? (
           <>
             <Polyline
@@ -190,54 +301,167 @@ export function IssueMapClient({
             />
           </>
         ) : null}
-        {reports.map((report) => {
-          const selected = report.id === selectedId
-          const routeIndex = routePoints ? routePoints.findIndex((r) => r.id === report.id) : undefined
-          return (
-            <Marker
-              key={report.id}
-              position={[report.latitude, report.longitude]}
-              icon={createMarkerIcon(report, selected, routeIndex)}
-              eventHandlers={{
-                click: () => {
-                  if (onRouteToggle) {
-                    onRouteToggle(report)
-                  } else {
-                    onSelect?.(report)
-                  }
-                },
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -34]} opacity={0.96}>
-                {onRouteToggle
-                  ? routeIndex !== undefined && routeIndex >= 0
-                    ? `Parada ${routeIndex + 1}: ${report.category} (${report.region}) · Clique para remover da rota`
-                    : `Adicionar à rota: ${report.category} (${report.region})`
-                  : routeIndex !== undefined && routeIndex >= 0
-                    ? `Parada ${routeIndex + 1}: ${report.category} · ${report.status}`
-                    : `${report.category} · ${report.status}`}
-              </Tooltip>
-            </Marker>
-          )
-        })}
+
+        {/* Camada de Intervenções Programadas (Trechos e Marcadores) */}
+        {showInterventionsLayer &&
+          interventions.map((intervention) => {
+            const isSelected = intervention.id === selectedInterventionId
+            const coords = intervention.geometry.map((pt) => [pt.latitude, pt.longitude] as [number, number])
+            const statusStyle = interventionStatusStyles[intervention.status]
+            const isCancelled = intervention.status === 'Cancelada'
+
+            // Pick midpoint coordinate for the badge icon
+            const midIndex = Math.floor(intervention.geometry.length / 2)
+            const midPoint = intervention.geometry[midIndex] || intervention.geometry[0]
+
+            return (
+              <div key={intervention.id}>
+                {coords.length > 1 ? (
+                  <>
+                    {/* Outer halo when selected or hover */}
+                    <Polyline
+                      positions={coords}
+                      pathOptions={{
+                        color: isSelected ? '#b45309' : statusStyle.polylineColor,
+                        weight: isSelected ? 11 : 7,
+                        opacity: isSelected ? 0.45 : 0.22,
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                      }}
+                      eventHandlers={{
+                        click: () => onSelectIntervention?.(intervention),
+                      }}
+                    />
+                    {/* Inner core stroke */}
+                    <Polyline
+                      positions={coords}
+                      pathOptions={{
+                        color: statusStyle.polylineColor,
+                        weight: isSelected ? 5.5 : 4,
+                        opacity: 0.95,
+                        dashArray: isCancelled ? '8, 8' : undefined,
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                      }}
+                      eventHandlers={{
+                        click: () => onSelectIntervention?.(intervention),
+                      }}
+                    />
+                  </>
+                ) : null}
+
+                {/* Marcador representativo no trecho */}
+                {midPoint ? (
+                  <Marker
+                    position={[midPoint.latitude, midPoint.longitude]}
+                    icon={createInterventionMarkerIcon(intervention, isSelected)}
+                    eventHandlers={{
+                      click: () => onSelectIntervention?.(intervention),
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -22]} opacity={0.96}>
+                      <strong>{intervention.title}</strong>
+                      <br />
+                      <span>
+                        {intervention.type} · {intervention.impact} ({intervention.status})
+                      </span>
+                    </Tooltip>
+                  </Marker>
+                ) : null}
+              </div>
+            )
+          })}
+
+        {/* Rascunho interativo de pontos durante cadastro de intervenção pela Gestão */}
+        {isInteractiveDrawing && interactivePoints.length > 0 ? (
+          <>
+            {interactivePoints.length > 1 ? (
+              <Polyline
+                positions={interactivePoints.map((p) => [p.latitude, p.longitude] as [number, number])}
+                pathOptions={{
+                  color: '#ea580c',
+                  weight: 4.5,
+                  opacity: 0.9,
+                  dashArray: '6, 6',
+                  lineJoin: 'round',
+                  lineCap: 'round',
+                }}
+              />
+            ) : null}
+            {interactivePoints.map((point, idx) => (
+              <Marker
+                key={`draft-point-${idx}-${point.latitude}-${point.longitude}`}
+                position={[point.latitude, point.longitude]}
+                icon={createDraftPointIcon(idx)}
+              >
+                <Tooltip permanent direction="top" offset={[0, -12]}>
+                  Ponto {idx + 1}
+                </Tooltip>
+              </Marker>
+            ))}
+          </>
+        ) : null}
+
+        {/* Camada de Ocorrências (Zeladoria Urbana) */}
+        {showReportsLayer &&
+          reports.map((report) => {
+            const selected = report.id === selectedId
+            const routeIndex = routePoints ? routePoints.findIndex((r) => r.id === report.id) : undefined
+            return (
+              <Marker
+                key={report.id}
+                position={[report.latitude, report.longitude]}
+                icon={createMarkerIcon(report, selected, routeIndex)}
+                eventHandlers={{
+                  click: () => {
+                    if (onRouteToggle) {
+                      onRouteToggle(report)
+                    } else {
+                      onSelect?.(report)
+                    }
+                  },
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -34]} opacity={0.96}>
+                  {onRouteToggle
+                    ? routeIndex !== undefined && routeIndex >= 0
+                      ? `Parada ${routeIndex + 1}: ${report.category} (${report.region}) · Clique para remover da rota`
+                      : `Adicionar à rota: ${report.category} (${report.region})`
+                    : routeIndex !== undefined && routeIndex >= 0
+                      ? `Parada ${routeIndex + 1}: ${report.category} · ${report.status}`
+                      : `${report.category} · ${report.status}`}
+                </Tooltip>
+              </Marker>
+            )
+          })}
       </MapContainer>
+
       {showCenterMarker ? (
         <div className="map-center-marker" aria-hidden="true">
           <MapPin size={42} strokeWidth={1.8} />
         </div>
       ) : null}
-      {reports.length === 0 ? (
+
+      {showReportsLayer && reports.length === 0 && (!showInterventionsLayer || interventions.length === 0) ? (
         <div className="map-empty-overlay">
-          <span>Nenhuma ocorrência encontrada neste recorte.</span>
+          <span>Nenhum elemento encontrado neste recorte.</span>
         </div>
       ) : null}
-      <div className="map-legend" aria-label="Legenda de status">
-        {Object.entries(statusStyles).map(([status, style]) => (
-          <span key={status} className="map-legend-item">
-            <i style={{ backgroundColor: style.dot }} aria-hidden="true" />
-            {status}
+
+      <div className="map-legend" aria-label="Legenda do mapa">
+        {showReportsLayer &&
+          Object.entries(statusStyles).map(([status, style]) => (
+            <span key={status} className="map-legend-item">
+              <i style={{ backgroundColor: style.dot }} aria-hidden="true" />
+              {status}
+            </span>
+          ))}
+        {showInterventionsLayer && interventions.length > 0 ? (
+          <span className="map-legend-item map-legend-intervention">
+            <i style={{ backgroundColor: '#ea580c' }} aria-hidden="true" />
+            Intervenções / Obras
           </span>
-        ))}
+        ) : null}
       </div>
     </div>
   )
