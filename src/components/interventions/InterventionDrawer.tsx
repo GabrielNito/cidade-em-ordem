@@ -96,8 +96,8 @@ export function InterventionDrawer({
             <div className="intervention-banner intervention-banner-cancelled" role="alert">
               <XCircle size={18} className="shrink-0" aria-hidden="true" />
               <div>
-                <strong>Intervenção cancelada pela Prefeitura</strong>
-                <p>O serviço programado foi desmarcado. O trecho permanece totalmente liberado para circulação.</p>
+                <strong>Intervenção cancelada</strong>
+                <p>O serviço programado foi cancelado pela administração municipal. Observe a sinalização local para condições de tráfego.</p>
               </div>
             </div>
           ) : isFinished ? (

@@ -254,7 +254,7 @@ export function InterventionManagementSection() {
     try {
       cancelIntervention(cancelModalIntervention.id, cancelReason)
       setSuccessMessage(
-        `Intervenção "${cancelModalIntervention.title}" cancelada. População notificada sobre liberação do trecho.`,
+        `Intervenção "${cancelModalIntervention.title}" cancelada. Justificativa registrada e comunicada aos cidadãos.`,
       )
       setCancelModalIntervention(null)
       setCancelReason('')
@@ -501,7 +501,7 @@ export function InterventionManagementSection() {
                   {item.status === 'Cancelada' ? (
                     <div className="intervention-card-alert-cancelled" role="alert">
                       <Ban size={15} className="shrink-0" aria-hidden="true" />
-                      <span>Intervenção cancelada. Trecho liberado ao trânsito.</span>
+                      <span>Intervenção cancelada pela administração municipal.</span>
                     </div>
                   ) : null}
 
@@ -838,7 +838,7 @@ export function InterventionManagementSection() {
             <header className="intervention-modal-header">
               <div>
                 <h3 className="text-red-700">Cancelar Intervenção Programada</h3>
-                <p>O comunicado será atualizado como Cancelado e a via constará como liberada.</p>
+                <p>O comunicado será atualizado como Cancelado com a justificativa administrativa informada.</p>
               </div>
               <button
                 type="button"

@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Clock3,
   Cone,
+  Info,
   MapPin,
   MapPinned,
   Plus,
@@ -143,9 +144,25 @@ export function ManagementDashboardPage() {
     () => reports.reduce((acc, r) => acc + (r.confirmations?.length ?? 0), 0),
     [reports],
   )
-  const finishedCount = reports.filter((r) => r.status === 'Finalizado').length
-  const totalCount = reports.length
-  const slaResolutionRate = totalCount > 0 ? Math.round((finishedCount / totalCount) * 100 * 0.95 + 4) : 92
+  // Prazo demonstrativo de referência para resolução de chamados concluídos (72h)
+  const DEMO_TARGET_HOURS = 72
+  const finishedWithDates = useMemo(
+    () => reports.filter((r) => r.status === 'Finalizado' && r.finishedAt && r.createdAt),
+    [reports],
+  )
+  const resolvedOnTimeCount = useMemo(
+    () =>
+      finishedWithDates.filter((r) => {
+        const diffMs = new Date(r.finishedAt!).getTime() - new Date(r.createdAt).getTime()
+        const diffHours = diffMs / (1000 * 60 * 60)
+        return diffHours <= DEMO_TARGET_HOURS
+      }).length,
+    [finishedWithDates],
+  )
+  const resolvedOnTimeRate =
+    finishedWithDates.length > 0
+      ? Math.round((resolvedOnTimeCount / finishedWithDates.length) * 100)
+      : 100
 
   // Open & pending orders for route planning
   const pendingOrders = useMemo(
@@ -321,12 +338,14 @@ export function ManagementDashboardPage() {
 
   const [streetDistanceKm, setStreetDistanceKm] = useState<number | null>(null)
   const [streetDurationMin, setStreetDurationMin] = useState<number | null>(null)
+  const [isRouteFallback, setIsRouteFallback] = useState(false)
 
   // Fetch real road-network distance & driving time along streets
   useEffect(() => {
     if (selectedRouteReports.length < 2) {
       setStreetDistanceKm(null)
       setStreetDurationMin(null)
+      setIsRouteFallback(false)
       return
     }
 
@@ -335,6 +354,7 @@ export function ManagementDashboardPage() {
       if (active && result) {
         setStreetDistanceKm(result.distanceKm)
         setStreetDurationMin(result.durationMinutes)
+        setIsRouteFallback(Boolean(result.isFallback))
       }
     })
 
@@ -456,9 +476,9 @@ export function ManagementDashboardPage() {
               <span className="metric-icon">
                 <ShieldCheck size={20} />
               </span>
-              <span className="metric-value">{slaResolutionRate}%</span>
-              <span className="metric-label">Cumprimento de SLA</span>
-              <span className="metric-support">Meta municipal (48h)</span>
+              <span className="metric-value">{resolvedOnTimeRate}%</span>
+              <span className="metric-label">Resolução no prazo</span>
+              <span className="metric-support">Meta demonstrativa ({DEMO_TARGET_HOURS}h)</span>
             </div>
             <div className="metric-card metric-engagement">
               <span className="metric-icon">
@@ -736,11 +756,21 @@ export function ManagementDashboardPage() {
                 <strong>{selectedRouteReportIds.length}</strong> paradas
               </span>
               <span className="route-metric-pill">
-                <strong>~{displayRouteDistance} km</strong> trajeto pelas vias
+                <strong>~{displayRouteDistance} km</strong>{' '}
+                {isRouteFallback ? 'trajeto aproximado' : 'trajeto pelas vias'}
               </span>
               <span className="route-metric-pill">
                 <strong>~{displayRouteTimeMinutes} min</strong> operação
               </span>
+              {isRouteFallback ? (
+                <span
+                  className="route-metric-pill route-fallback-pill"
+                  title="Serviço de roteamento viário externo temporariamente indisponível. Traçado aproximado em linha reta."
+                >
+                  <Info size={13} aria-hidden="true" />
+                  <span>Estimativa geométrica</span>
+                </span>
+              ) : null}
             </div>
 
             <div className="route-toolbar-actions">

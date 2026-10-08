@@ -71,5 +71,6 @@ describe('geo helpers', () => {
     const result = await fetchStreetRoute(points)
     expect(result).not.toBeNull()
     expect(result?.coordinates.length).toBeGreaterThanOrEqual(2)
+    expect(typeof result?.isFallback).toBe('boolean')
   })
 })

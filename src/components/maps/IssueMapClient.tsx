@@ -191,11 +191,13 @@ export function IssueMapClient({
   const selectedIntervention = interventions.find((item) => item.id === selectedInterventionId)
   const mapRootRef = useRef<HTMLDivElement>(null)
   const [streetRouteCoords, setStreetRouteCoords] = useState<[number, number][]>([])
+  const [isStreetFallback, setIsStreetFallback] = useState(false)
 
   // Fetch real road-network geometry following streets for crew route
   useEffect(() => {
     if (!routePoints || routePoints.length < 2) {
       setStreetRouteCoords([])
+      setIsStreetFallback(false)
       return
     }
 
@@ -203,6 +205,7 @@ export function IssueMapClient({
     fetchStreetRoute(routePoints).then((result) => {
       if (active && result && result.coordinates.length > 0) {
         setStreetRouteCoords(result.coordinates)
+        setIsStreetFallback(Boolean(result.isFallback))
       }
     })
 
@@ -460,6 +463,12 @@ export function IssueMapClient({
           <span className="map-legend-item map-legend-intervention">
             <i style={{ backgroundColor: '#ea580c' }} aria-hidden="true" />
             Intervenções / Obras
+          </span>
+        ) : null}
+        {routePoints && routePoints.length > 1 ? (
+          <span className="map-legend-item">
+            <i style={{ backgroundColor: '#185a4e' }} aria-hidden="true" />
+            {isStreetFallback ? 'Rota (estimativa geométrica)' : 'Rota pelas vias'}
           </span>
         ) : null}
       </div>

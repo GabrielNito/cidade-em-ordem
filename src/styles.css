@@ -4502,6 +4502,13 @@ button:active:not(:disabled), a:active { transform: scale(.98); }
   font-weight: 800;
 }
 
+.route-fallback-pill {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+  font-weight: 600;
+}
+
 .route-toolbar-actions {
   display: flex;
   align-items: center;

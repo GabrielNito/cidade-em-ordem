@@ -286,7 +286,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ? `Concluída: ${updated.title}`
             : `Atualização: ${updated.title}`,
         message: isCancelled
-          ? `A intervenção programada no trecho ${updated.affectedLocation} foi cancelada pela Prefeitura. Trecho liberado para circulação.`
+          ? `A intervenção programada no trecho ${updated.affectedLocation} foi cancelada pela administração municipal.`
           : isEnded
             ? `A intervenção no trecho ${updated.affectedLocation} foi concluída com sucesso. Via liberada.`
             : `${updated.type} em ${updated.affectedLocation}. Previsão atualizada: ${formatInterventionDateRange(updated.startsAt, updated.endsAt)}.`,
@@ -325,7 +325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: notifId,
         type: 'OFFICIAL_ALERT',
         title: `Cancelada: ${cancelled.title}`,
-        message: `A intervenção programada no trecho ${cancelled.affectedLocation} foi cancelada pela Prefeitura. Trecho liberado para circulação.${cancelled.guidance ? ` Observação: ${cancelled.guidance}` : ''}`,
+        message: `A intervenção programada no trecho ${cancelled.affectedLocation} foi cancelada pela administração municipal.${cancelled.guidance ? ` Justificativa: ${cancelled.guidance}` : ''}`,
         interventionId: cancelled.id,
         affectedLocation: cancelled.affectedLocation,
         startsAt: cancelled.startsAt,

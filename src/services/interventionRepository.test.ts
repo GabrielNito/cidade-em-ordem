@@ -174,4 +174,16 @@ describe('interventionRepository', () => {
     expect(isPendingManagementUpdate(pastIntervention)).toBe(true)
     expect(pastIntervention.status).toBe('Programada')
   })
+
+  it('cancelamento preserva justificativa administrativa sem presumir liberação de via', () => {
+    const created = interventionRepository.create(baseInterventionInput)
+    const cancelled = interventionRepository.cancel(
+      created.id,
+      'Serviço desmarcado por condições climáticas desfavoráveis.',
+    )
+
+    expect(cancelled.status).toBe('Cancelada')
+    expect(cancelled.guidance).toContain('Cancelamento: Serviço desmarcado por condições climáticas desfavoráveis.')
+    expect(cancelled.guidance).not.toContain('liberada para circulação')
+  })
 })

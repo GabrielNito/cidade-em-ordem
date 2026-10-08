@@ -72,6 +72,7 @@ export interface RouteGeometryResult {
   coordinates: [number, number][]
   distanceKm: number
   durationMinutes: number
+  isFallback?: boolean
 }
 
 const clientRouteCache = new Map<string, RouteGeometryResult>()
@@ -82,6 +83,7 @@ export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometr
       coordinates: points.map((p) => [p.latitude, p.longitude]),
       distanceKm: 0,
       durationMinutes: 0,
+      isFallback: false,
     }
   }
 
@@ -98,10 +100,12 @@ export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometr
     if (res.ok) {
       const data = await res.json()
       if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+        const isFallback = data.mode === 'fallback'
         const result: RouteGeometryResult = {
           coordinates: data.coordinates,
           distanceKm: data.distanceKm || calculateRouteDistanceKm(points),
           durationMinutes: data.durationMinutes || Math.round(calculateRouteDistanceKm(points) * 3.5),
+          isFallback,
         }
         clientRouteCache.set(cacheKey, result)
         return result
@@ -129,6 +133,7 @@ export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometr
           coordinates: leafletCoords,
           distanceKm,
           durationMinutes,
+          isFallback: false,
         }
         clientRouteCache.set(cacheKey, result)
         return result
@@ -144,6 +149,7 @@ export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometr
     coordinates: points.map((p) => [p.latitude, p.longitude]),
     distanceKm: fallbackDistance,
     durationMinutes: Math.round(fallbackDistance * 3.5),
+    isFallback: true,
   }
   return fallbackResult
 }
