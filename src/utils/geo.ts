@@ -68,3 +68,83 @@ export function optimizeRouteOrder<T extends GeoPoint>(points: T[]): T[] {
   return result
 }
 
+export interface RouteGeometryResult {
+  coordinates: [number, number][]
+  distanceKm: number
+  durationMinutes: number
+}
+
+const clientRouteCache = new Map<string, RouteGeometryResult>()
+
+export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometryResult | null> {
+  if (points.length < 2) {
+    return {
+      coordinates: points.map((p) => [p.latitude, p.longitude]),
+      distanceKm: 0,
+      durationMinutes: 0,
+    }
+  }
+
+  const cacheKey = points.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`).join(';')
+  if (clientRouteCache.has(cacheKey)) {
+    return clientRouteCache.get(cacheKey)!
+  }
+
+  const pointsParam = points.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`).join(';')
+
+  // 1. Try internal Next.js proxy route
+  try {
+    const res = await fetch(`/api/route-path?points=${pointsParam}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+        const result: RouteGeometryResult = {
+          coordinates: data.coordinates,
+          distanceKm: data.distanceKm || calculateRouteDistanceKm(points),
+          durationMinutes: data.durationMinutes || Math.round(calculateRouteDistanceKm(points) * 3.5),
+        }
+        clientRouteCache.set(cacheKey, result)
+        return result
+      }
+    }
+  } catch {
+    // Continue to direct fallback
+  }
+
+  // 2. Try direct OSRM endpoint (has open CORS headers)
+  try {
+    const osrmCoords = points.map((p) => `${p.longitude},${p.latitude}`).join(';')
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`,
+    )
+    if (res.ok) {
+      const data = await res.json()
+      if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates) {
+        const rawCoords: [number, number][] = data.routes[0].geometry.coordinates
+        const leafletCoords: [number, number][] = rawCoords.map(([lon, lat]) => [lat, lon])
+        const distanceKm = Number(((data.routes[0].distance ?? 0) / 1000).toFixed(1))
+        const durationMinutes = Math.round((data.routes[0].duration ?? 0) / 60)
+
+        const result: RouteGeometryResult = {
+          coordinates: leafletCoords,
+          distanceKm,
+          durationMinutes,
+        }
+        clientRouteCache.set(cacheKey, result)
+        return result
+      }
+    }
+  } catch {
+    // Continue to straight line fallback
+  }
+
+  // 3. Fallback: straight lines between points
+  const fallbackDistance = calculateRouteDistanceKm(points)
+  const fallbackResult: RouteGeometryResult = {
+    coordinates: points.map((p) => [p.latitude, p.longitude]),
+    distanceKm: fallbackDistance,
+    durationMinutes: Math.round(fallbackDistance * 3.5),
+  }
+  return fallbackResult
+}
+

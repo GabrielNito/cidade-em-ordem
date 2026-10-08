@@ -1,11 +1,12 @@
 'use client'
 
 import { divIcon } from 'leaflet'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { MapPin } from 'lucide-react'
 import type { GeoPoint, Report, ReportCategory } from '../../types/domain'
 import { statusStyles } from '../../utils/report'
+import { fetchStreetRoute } from '../../utils/geo'
 
 const INDAIATUBA_CENTER: [number, number] = [-23.0903, -47.2181]
 
@@ -104,6 +105,33 @@ export function IssueMapClient({
 }) {
   const selectedReport = reports.find((report) => report.id === selectedId)
   const mapRootRef = useRef<HTMLDivElement>(null)
+  const [streetRouteCoords, setStreetRouteCoords] = useState<[number, number][]>([])
+
+  // Fetch real road-network geometry following streets
+  useEffect(() => {
+    if (!routePoints || routePoints.length < 2) {
+      setStreetRouteCoords([])
+      return
+    }
+
+    let active = true
+    fetchStreetRoute(routePoints).then((result) => {
+      if (active && result && result.coordinates.length > 0) {
+        setStreetRouteCoords(result.coordinates)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [routePoints])
+
+  const polylinePositions =
+    streetRouteCoords.length > 0
+      ? streetRouteCoords
+      : (routePoints && routePoints.length > 1
+          ? routePoints.map((r) => [r.latitude, r.longitude] as [number, number])
+          : [])
 
   useEffect(() => {
     const root = mapRootRef.current
@@ -138,15 +166,27 @@ export function IssueMapClient({
           maxZoom={20}
         />
         <MapViewport selectedReport={selectedReport} focusPoint={focusPoint} onCenterChange={onCenterChange} />
-        {routePoints && routePoints.length > 1 ? (
+        {polylinePositions.length > 1 ? (
           <>
             <Polyline
-              positions={routePoints.map((r) => [r.latitude, r.longitude] as [number, number])}
-              pathOptions={{ color: '#0d5257', weight: 8, opacity: 0.25 }}
+              positions={polylinePositions}
+              pathOptions={{
+                color: '#0d5257',
+                weight: 8,
+                opacity: 0.32,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }}
             />
             <Polyline
-              positions={routePoints.map((r) => [r.latitude, r.longitude] as [number, number])}
-              pathOptions={{ color: '#185a4e', weight: 4, opacity: 0.95, dashArray: '8, 8' }}
+              positions={polylinePositions}
+              pathOptions={{
+                color: '#185a4e',
+                weight: 4.5,
+                opacity: 0.95,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }}
             />
           </>
         ) : null}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Report } from '../types/domain'
-import { calculateRouteDistanceKm, distanceInMeters, findNearbyReports, optimizeRouteOrder } from './geo'
+import { calculateRouteDistanceKm, distanceInMeters, fetchStreetRoute, findNearbyReports, optimizeRouteOrder } from './geo'
 
 const baseReport: Report = {
   id: 'nearby-report',
@@ -58,5 +58,18 @@ describe('geo helpers', () => {
     const p3 = { id: '3', latitude: -23.081, longitude: -47.201 } // Close to p1
     const optimized = optimizeRouteOrder([p1, p2, p3])
     expect(optimized.map((p) => p.id)).toEqual(['1', '3', '2'])
+  })
+
+  it('retorna traçado e dados de rota para pontos fornecidos', async () => {
+    const single = await fetchStreetRoute([{ latitude: -23.08, longitude: -47.2 }])
+    expect(single?.coordinates.length).toBe(1)
+
+    const points = [
+      { latitude: -23.0888, longitude: -47.2185 },
+      { latitude: -23.0955, longitude: -47.214 },
+    ]
+    const result = await fetchStreetRoute(points)
+    expect(result).not.toBeNull()
+    expect(result?.coordinates.length).toBeGreaterThanOrEqual(2)
   })
 })

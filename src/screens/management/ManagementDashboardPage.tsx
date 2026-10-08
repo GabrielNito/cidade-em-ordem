@@ -31,7 +31,7 @@ import { useApp } from '../../context/AppContext'
 import { averageServiceDuration } from '../../services/reportRepository'
 import { categoryStyles, formatCount, formatDuration, formatShortDate } from '../../utils/report'
 import { CREW_MEMBERS } from '../../data/crew'
-import { calculateRouteDistanceKm, optimizeRouteOrder } from '../../utils/geo'
+import { calculateRouteDistanceKm, fetchStreetRoute, optimizeRouteOrder } from '../../utils/geo'
 
 type FilterValue = 'Todos' | ReportStatus
 
@@ -316,6 +316,36 @@ export function ManagementDashboardPage() {
     if (selectedRouteReports.length === 0) return 0
     return Math.round(selectedRouteReports.length * 35 + routeDistanceKm * 3.5)
   }, [selectedRouteReports.length, routeDistanceKm])
+
+  const [streetDistanceKm, setStreetDistanceKm] = useState<number | null>(null)
+  const [streetDurationMin, setStreetDurationMin] = useState<number | null>(null)
+
+  // Fetch real road-network distance & driving time along streets
+  useEffect(() => {
+    if (selectedRouteReports.length < 2) {
+      setStreetDistanceKm(null)
+      setStreetDurationMin(null)
+      return
+    }
+
+    let active = true
+    fetchStreetRoute(selectedRouteReports).then((result) => {
+      if (active && result) {
+        setStreetDistanceKm(result.distanceKm)
+        setStreetDurationMin(result.durationMinutes)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [selectedRouteReports])
+
+  const displayRouteDistance = streetDistanceKm ?? routeDistanceKm
+  const displayRouteTimeMinutes =
+    streetDurationMin !== null
+      ? Math.round(selectedRouteReports.length * 35 + streetDurationMin)
+      : routeEstimatedTimeMinutes
 
   return (
     <div className="content-stack dashboard-page desktop-command-center">
@@ -692,10 +722,10 @@ export function ManagementDashboardPage() {
                 <strong>{selectedRouteReportIds.length}</strong> paradas
               </span>
               <span className="route-metric-pill">
-                <strong>~{routeDistanceKm} km</strong> trajeto
+                <strong>~{displayRouteDistance} km</strong> trajeto pelas vias
               </span>
               <span className="route-metric-pill">
-                <strong>~{routeEstimatedTimeMinutes} min</strong> operação
+                <strong>~{displayRouteTimeMinutes} min</strong> operação
               </span>
             </div>
 
