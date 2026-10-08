@@ -2,7 +2,7 @@
 
 import { divIcon } from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { MapPin } from 'lucide-react'
 import type { GeoPoint, Report, ReportCategory, ScheduledIntervention } from '../../types/domain'
 import { statusStyles } from '../../utils/report'
@@ -86,6 +86,38 @@ function createDraftPointIcon(index: number) {
   })
 }
 
+function UserLocationMarker({ location, accuracy }: { location: GeoPoint; accuracy?: number }) {
+  const position: [number, number] = [location.latitude, location.longitude]
+  const accuracyRadius = Number.isFinite(accuracy) ? Math.min(Math.max(accuracy ?? 0, 18), 250) : 36
+
+  return (
+    <>
+      <Circle
+        center={position}
+        radius={accuracyRadius}
+        pathOptions={{
+          color: '#2563eb',
+          fillColor: '#60a5fa',
+          fillOpacity: 0.14,
+          opacity: 0.7,
+          weight: 1.5,
+        }}
+      />
+      <CircleMarker
+        center={position}
+        radius={7}
+        pathOptions={{
+          color: '#ffffff',
+          fillColor: '#2563eb',
+          fillOpacity: 1,
+          opacity: 1,
+          weight: 2.5,
+        }}
+      />
+    </>
+  )
+}
+
 function MapViewport({
   selectedReport,
   selectedIntervention,
@@ -150,6 +182,8 @@ export function IssueMapClient({
   reports,
   selectedId,
   onSelect,
+  userLocation,
+  userLocationAccuracy,
   focusPoint,
   initialCenter,
   onCenterChange,
@@ -171,6 +205,8 @@ export function IssueMapClient({
   reports: Report[]
   selectedId?: string
   onSelect?: (report: Report) => void
+  userLocation?: GeoPoint
+  userLocationAccuracy?: number
   focusPoint?: GeoPoint
   initialCenter?: GeoPoint
   onCenterChange?: (point: GeoPoint) => void
@@ -490,6 +526,8 @@ export function IssueMapClient({
               </Marker>
             )
           })}
+
+        {userLocation ? <UserLocationMarker location={userLocation} accuracy={userLocationAccuracy} /> : null}
       </MapContainer>
 
       {showCenterMarker ? (

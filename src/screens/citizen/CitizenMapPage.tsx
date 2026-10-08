@@ -37,6 +37,8 @@ export function CitizenMapPage() {
   const [selectedId, setSelectedId] = useState<string>()
   const [selectedInterventionId, setSelectedInterventionId] = useState<string>()
   const [userLocation, setUserLocation] = useState<GeoPoint>()
+  const [userLocationAccuracy, setUserLocationAccuracy] = useState<number>()
+  const [mapFocusPoint, setMapFocusPoint] = useState<GeoPoint>()
   const [isLocating, setIsLocating] = useState(false)
   const [locationError, setLocationError] = useState('')
   const [experienceMessage, setExperienceMessage] = useState('')
@@ -60,7 +62,7 @@ export function CitizenMapPage() {
       setSelectedId(undefined)
       const found = interventions.find((i) => i.id === interventionParam)
       if (found && found.geometry.length > 0) {
-        setUserLocation(found.geometry[0])
+        setMapFocusPoint(found.geometry[0])
       }
       navigate('/app/mapa', { replace: true })
       return
@@ -92,7 +94,10 @@ export function CitizenMapPage() {
     setIsLocating(true)
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude })
+        const location = { latitude: position.coords.latitude, longitude: position.coords.longitude }
+        setUserLocation(location)
+        setUserLocationAccuracy(position.coords.accuracy)
+        setMapFocusPoint(location)
         setIsLocating(false)
       },
       () => {
@@ -209,7 +214,9 @@ export function CitizenMapPage() {
         }}
         showReportsLayer={showReportsLayer}
         showInterventionsLayer={showInterventionsLayer}
-        focusPoint={userLocation}
+        userLocation={userLocation}
+        userLocationAccuracy={userLocationAccuracy}
+        focusPoint={mapFocusPoint}
         zoom={15}
         scrollWheelZoom
         className="map-first-map"

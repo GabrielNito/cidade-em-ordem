@@ -7,6 +7,8 @@ export type IssueMapProps = {
   reports: Report[]
   selectedId?: string
   onSelect?: (report: Report) => void
+  userLocation?: GeoPoint
+  userLocationAccuracy?: number
   focusPoint?: GeoPoint
   initialCenter?: GeoPoint
   onCenterChange?: (point: GeoPoint) => void
