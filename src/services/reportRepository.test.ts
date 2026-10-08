@@ -60,4 +60,16 @@ describe('reportRepository', () => {
     expect(() => reportRepository.confirm('report-001', DEMO_CITIZEN.id)).toThrow('própria ocorrência')
     expect(() => reportRepository.confirm('report-003', DEMO_CITIZEN.id)).toThrow('finalizadas')
   })
+
+  it('remove uma ocorrência persistida e rejeita um identificador desconhecido', () => {
+    const removed = reportRepository.remove('report-013')
+
+    expect(removed.id).toBe('report-013')
+    expect(reportRepository.getById('report-013')).toBeUndefined()
+    expect(reportRepository.list()).toHaveLength(15)
+    expect(JSON.parse(localStorage.getItem(REPORT_STORAGE_KEY) ?? '[]')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'report-013' })]),
+    )
+    expect(() => reportRepository.remove('report-does-not-exist')).toThrow('Ocorrência não encontrada')
+  })
 })

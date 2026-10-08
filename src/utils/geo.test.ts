@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Report } from '../types/domain'
-import { calculateRouteDistanceKm, distanceInMeters, fetchStreetRoute, findNearbyReports, optimizeRouteOrder } from './geo'
+import {
+  calculateRouteDistanceKm,
+  distanceInMeters,
+  fetchStreetRoute,
+  findNearbyReports,
+  getRenderableRouteCoordinates,
+  optimizeRouteOrder,
+} from './geo'
 
 const baseReport: Report = {
   id: 'nearby-report',
@@ -72,5 +79,29 @@ describe('geo helpers', () => {
     expect(result).not.toBeNull()
     expect(result?.coordinates.length).toBeGreaterThanOrEqual(2)
     expect(typeof result?.isFallback).toBe('boolean')
+  })
+
+  it('prefere a geometria calculada pelas vias ao desenhar um trecho', () => {
+    const anchors = [
+      { latitude: -23.08, longitude: -47.2 },
+      { latitude: -23.082, longitude: -47.204 },
+    ]
+    const routedCoordinates: [number, number][] = [
+      [-23.08, -47.2],
+      [-23.0811, -47.2014],
+      [-23.0804, -47.2032],
+      [-23.082, -47.204],
+    ]
+
+    expect(
+      getRenderableRouteCoordinates(anchors, {
+        coordinates: routedCoordinates,
+        distanceKm: 0.6,
+        durationMinutes: 2,
+      }),
+    ).toEqual(routedCoordinates)
+    expect(getRenderableRouteCoordinates(anchors, null)).toEqual(
+      anchors.map((point) => [point.latitude, point.longitude]),
+    )
   })
 })

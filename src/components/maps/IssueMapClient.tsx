@@ -6,10 +6,12 @@ import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvent
 import { MapPin } from 'lucide-react'
 import type { GeoPoint, Report, ReportCategory, ScheduledIntervention } from '../../types/domain'
 import { statusStyles } from '../../utils/report'
-import { fetchStreetRoute } from '../../utils/geo'
+import { fetchStreetRoute, getRenderableRouteCoordinates, type RouteGeometryResult } from '../../utils/geo'
 import { interventionStatusStyles } from '../../utils/intervention'
 
 const INDAIATUBA_CENTER: [number, number] = [-23.0903, -47.2181]
+const EMPTY_INTERVENTIONS: ScheduledIntervention[] = []
+const EMPTY_INTERACTIVE_POINTS: GeoPoint[] = []
 
 const categoryMarkerIcons: Record<ReportCategory, string> = {
   'Buraco na via': '<path d="M5 15.5 8.5 9l4 2.5L16 5l3 3.5-3 5 3 3.5H5Z"/><path d="M8 18h8"/>',
@@ -157,12 +159,12 @@ export function IssueMapClient({
   className = '',
   routePoints,
   onRouteToggle,
-  interventions = [],
+  interventions = EMPTY_INTERVENTIONS,
   selectedInterventionId,
   onSelectIntervention,
   showInterventionsLayer = true,
   showReportsLayer = true,
-  interactivePoints = [],
+  interactivePoints = EMPTY_INTERACTIVE_POINTS,
   onAddInteractivePoint,
   isInteractiveDrawing = false,
 }: {
@@ -192,6 +194,8 @@ export function IssueMapClient({
   const mapRootRef = useRef<HTMLDivElement>(null)
   const [streetRouteCoords, setStreetRouteCoords] = useState<[number, number][]>([])
   const [isStreetFallback, setIsStreetFallback] = useState(false)
+  const [interventionRouteResults, setInterventionRouteResults] = useState<Record<string, RouteGeometryResult>>({})
+  const [draftRouteResult, setDraftRouteResult] = useState<RouteGeometryResult | null>(null)
 
   // Fetch real road-network geometry following streets for crew route
   useEffect(() => {
@@ -213,6 +217,51 @@ export function IssueMapClient({
       active = false
     }
   }, [routePoints])
+
+  // Interventions and their registration draft must use the road network too;
+  // the clicked points are anchors, not the final line to paint over the map.
+  useEffect(() => {
+    if (!showInterventionsLayer || interventions.length === 0) {
+      setInterventionRouteResults({})
+      return
+    }
+
+    let active = true
+    setInterventionRouteResults({})
+
+    Promise.all(
+      interventions.map(async (intervention) => {
+        const route = await fetchStreetRoute(intervention.geometry)
+        return route ? ([intervention.id, route] as const) : null
+      }),
+    ).then((entries) => {
+      if (!active) return
+      setInterventionRouteResults(
+        Object.fromEntries(entries.filter((entry): entry is [string, RouteGeometryResult] => entry !== null)),
+      )
+    })
+
+    return () => {
+      active = false
+    }
+  }, [interventions, showInterventionsLayer])
+
+  useEffect(() => {
+    if (!isInteractiveDrawing || interactivePoints.length < 2) {
+      setDraftRouteResult(null)
+      return
+    }
+
+    let active = true
+    setDraftRouteResult(null)
+    fetchStreetRoute(interactivePoints).then((result) => {
+      if (active) setDraftRouteResult(result)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [interactivePoints, isInteractiveDrawing])
 
   const polylinePositions =
     streetRouteCoords.length > 0
@@ -309,21 +358,25 @@ export function IssueMapClient({
         {showInterventionsLayer &&
           interventions.map((intervention) => {
             const isSelected = intervention.id === selectedInterventionId
-            const coords = intervention.geometry.map((pt) => [pt.latitude, pt.longitude] as [number, number])
+            const routeResult = interventionRouteResults[intervention.id]
+            const routeCoords = routeResult
+              ? getRenderableRouteCoordinates(intervention.geometry, routeResult)
+              : []
+            const anchorCoords = getRenderableRouteCoordinates(intervention.geometry, null)
+            const markerCoords = routeCoords.length > 0 ? routeCoords : anchorCoords
             const statusStyle = interventionStatusStyles[intervention.status]
             const isCancelled = intervention.status === 'Cancelada'
 
             // Pick midpoint coordinate for the badge icon
-            const midIndex = Math.floor(intervention.geometry.length / 2)
-            const midPoint = intervention.geometry[midIndex] || intervention.geometry[0]
+            const midPoint = markerCoords[Math.floor(markerCoords.length / 2)]
 
             return (
               <div key={intervention.id}>
-                {coords.length > 1 ? (
+                {routeCoords.length > 1 ? (
                   <>
                     {/* Outer halo when selected or hover */}
                     <Polyline
-                      positions={coords}
+                      positions={routeCoords}
                       pathOptions={{
                         color: isSelected ? '#b45309' : statusStyle.polylineColor,
                         weight: isSelected ? 11 : 7,
@@ -337,7 +390,7 @@ export function IssueMapClient({
                     />
                     {/* Inner core stroke */}
                     <Polyline
-                      positions={coords}
+                      positions={routeCoords}
                       pathOptions={{
                         color: statusStyle.polylineColor,
                         weight: isSelected ? 5.5 : 4,
@@ -356,7 +409,7 @@ export function IssueMapClient({
                 {/* Marcador representativo no trecho */}
                 {midPoint ? (
                   <Marker
-                    position={[midPoint.latitude, midPoint.longitude]}
+                    position={midPoint}
                     icon={createInterventionMarkerIcon(intervention, isSelected)}
                     eventHandlers={{
                       click: () => onSelectIntervention?.(intervention),
@@ -378,9 +431,9 @@ export function IssueMapClient({
         {/* Rascunho interativo de pontos durante cadastro de intervenção pela Gestão */}
         {isInteractiveDrawing && interactivePoints.length > 0 ? (
           <>
-            {interactivePoints.length > 1 ? (
+            {draftRouteResult ? (
               <Polyline
-                positions={interactivePoints.map((p) => [p.latitude, p.longitude] as [number, number])}
+                positions={getRenderableRouteCoordinates(interactivePoints, draftRouteResult)}
                 pathOptions={{
                   color: '#ea580c',
                   weight: 4.5,

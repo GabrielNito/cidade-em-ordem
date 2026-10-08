@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Truck,
+  Trash2,
   UsersRound,
   Wrench,
   X,
@@ -78,7 +79,7 @@ const CREW_EQUIPMENT: Record<string, { vehicle: string; radio: string }> = {
 }
 
 export function ManagementDashboardPage() {
-  const { reports, interventions, assignReport, createReport } = useApp()
+  const { reports, interventions, assignReport, createReport, deleteReport, role } = useApp()
   const [activeTab, setActiveTab] = useState<'visao-geral' | 'rotas' | 'intervencoes' | 'equipes'>('visao-geral')
 
   // Filters for Map view
@@ -90,6 +91,13 @@ export function ManagementDashboardPage() {
   const [assignmentMessage, setAssignmentMessage] = useState('')
   const [assignmentError, setAssignmentError] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Report | null>(null)
+  const [deleteStep, setDeleteStep] = useState<1 | 2 | 3>(1)
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false)
+  const [deleteProtocol, setDeleteProtocol] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Walk-in citizen report modal (Balcão presencial)
   const [isWalkInOpen, setIsWalkInOpen] = useState(false)
@@ -206,6 +214,64 @@ export function ManagementDashboardPage() {
       setAssignmentMessage('Responsável atribuído.')
     } catch (error) {
       setAssignmentError(error instanceof Error ? error.message : 'Não foi possível atribuir o responsável.')
+    }
+  }
+
+  const handleOpenDelete = () => {
+    if (!selected || role !== 'MANAGER') return
+    setDeleteTarget(selected)
+    setDeleteStep(1)
+    setDeleteAcknowledged(false)
+    setDeleteProtocol('')
+    setDeleteError('')
+  }
+
+  const handleCloseDelete = () => {
+    if (isDeleting) return
+    setDeleteTarget(null)
+    setDeleteStep(1)
+    setDeleteAcknowledged(false)
+    setDeleteProtocol('')
+    setDeleteError('')
+  }
+
+  const handleDeleteStepAdvance = () => {
+    if (!deleteTarget) return
+    setDeleteError('')
+
+    if (deleteStep === 1) {
+      setDeleteStep(2)
+      return
+    }
+
+    if (deleteStep === 2) {
+      if (!deleteAcknowledged) {
+        setDeleteError('Marque a confirmação de leitura antes de continuar.')
+        return
+      }
+      if (deleteProtocol.trim().toUpperCase() !== deleteTarget.protocol.toUpperCase()) {
+        setDeleteError(`Digite exatamente o protocolo ${deleteTarget.protocol} para validar a exclusão.`)
+        return
+      }
+      setDeleteStep(3)
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const removed = deleteReport(deleteTarget.id)
+      setSelected(undefined)
+      setSelectedRouteReportIds((current) => current.filter((id) => id !== removed.id))
+      setDeleteTarget(null)
+      setDeleteStep(1)
+      setDeleteAcknowledged(false)
+      setDeleteProtocol('')
+      setDeleteSuccessMessage(`Ocorrência ${removed.protocol} excluída com sucesso.`)
+      window.setTimeout(() => setDeleteSuccessMessage(''), 5000)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Não foi possível excluir a ocorrência.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -441,6 +507,12 @@ export function ManagementDashboardPage() {
         </button>
       </div>
 
+      {deleteSuccessMessage ? (
+        <p className="inline-feedback" role="status">
+          {deleteSuccessMessage}
+        </p>
+      ) : null}
+
       {/* TAB 1: VISÃO GERAL & MAPA */}
       {activeTab === 'visao-geral' && (
         <>
@@ -626,6 +698,18 @@ export function ManagementDashboardPage() {
                   <p className="form-error" role="alert">
                     {assignmentError}
                   </p>
+                ) : null}
+                {role === 'MANAGER' ? (
+                  <div className="manager-delete-row">
+                    <button
+                      type="button"
+                      className="button-danger button-small"
+                      onClick={handleOpenDelete}
+                      aria-label={`Excluir ocorrência ${selected.protocol}`}
+                    >
+                      <Trash2 size={15} /> Excluir ocorrência
+                    </button>
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -1194,6 +1278,147 @@ export function ManagementDashboardPage() {
           </div>
         </div>
       )}
+
+      {deleteTarget ? (
+        <div
+          className="intervention-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-report-title"
+        >
+          <div className="intervention-modal-content max-w-md">
+            <header className="intervention-modal-header">
+              <div>
+                <p className="eyebrow">Validação em 3 etapas · Etapa {deleteStep} de 3</p>
+                <h3 id="delete-report-title" className="text-red-700">
+                  Excluir ocorrência
+                </h3>
+                <p>A remoção é permanente no ambiente municipal local e não pode ser desfeita.</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={handleCloseDelete}
+                disabled={isDeleting}
+                aria-label="Fechar validação de exclusão"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="p-4 space-y-4">
+              {deleteError ? (
+                <p className="form-error" role="alert">
+                  {deleteError}
+                </p>
+              ) : null}
+
+              {deleteStep === 1 ? (
+                <div className="space-y-3 text-sm text-slate-700">
+                  <p>
+                    Confirme que você está revisando a ocorrência correta antes de liberar a próxima etapa.
+                  </p>
+                  <dl className="grid gap-2 rounded-lg border border-red-100 bg-red-50 p-3">
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Protocolo</dt>
+                      <dd className="font-bold text-slate-900">{deleteTarget.protocol}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ocorrência</dt>
+                      <dd>{deleteTarget.category} · {deleteTarget.region}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Situação atual</dt>
+                      <dd>{deleteTarget.status}</dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : null}
+
+              {deleteStep === 2 ? (
+                <div className="space-y-4 text-sm text-slate-700">
+                  <p>
+                    Para validar a intenção, marque a ciência e digite o protocolo completo da ocorrência.
+                  </p>
+                  <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <input
+                      id="delete-report-ack"
+                      type="checkbox"
+                      checked={deleteAcknowledged}
+                      onChange={(event) => setDeleteAcknowledged(event.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>
+                      Li os dados acima e entendo que a exclusão remove a ocorrência das listas, do mapa e das
+                      notificações relacionadas.
+                    </span>
+                  </label>
+                  <div className="form-group">
+                    <label htmlFor="delete-report-protocol">Digite o protocolo para continuar</label>
+                    <input
+                      id="delete-report-protocol"
+                      type="text"
+                      value={deleteProtocol}
+                      onChange={(event) => setDeleteProtocol(event.target.value)}
+                      placeholder={deleteTarget.protocol}
+                      autoComplete="off"
+                      className="input-text"
+                    />
+                    <small className="text-xs text-slate-500">Esperado: {deleteTarget.protocol}</small>
+                  </div>
+                </div>
+              ) : null}
+
+              {deleteStep === 3 ? (
+                <div className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                  <strong>Última confirmação</strong>
+                  <p>
+                    Você validou a exclusão da ocorrência <strong>{deleteTarget.protocol}</strong>. Ao confirmar,
+                    ela será removida definitivamente deste ambiente.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="intervention-modal-footer">
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => {
+                  if (deleteStep === 1) {
+                    handleCloseDelete()
+                  } else {
+                    setDeleteStep(deleteStep === 3 ? 2 : 1)
+                    setDeleteError('')
+                  }
+                }}
+                disabled={isDeleting}
+              >
+                {deleteStep === 1 ? 'Cancelar' : 'Voltar'}
+              </button>
+              <button
+                type="button"
+                className={deleteStep === 3 ? 'button-danger bg-red-600 text-white hover:bg-red-700' : 'button-primary'}
+                onClick={handleDeleteStepAdvance}
+                disabled={
+                  isDeleting ||
+                  (deleteStep === 2 &&
+                    (!deleteAcknowledged ||
+                      deleteProtocol.trim().toUpperCase() !== deleteTarget.protocol.toUpperCase()))
+                }
+              >
+                {deleteStep === 1
+                  ? 'Continuar para validação'
+                  : deleteStep === 2
+                    ? 'Revisar exclusão final'
+                    : isDeleting
+                      ? 'Excluindo…'
+                      : 'Excluir definitivamente'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

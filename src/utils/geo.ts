@@ -75,6 +75,14 @@ export interface RouteGeometryResult {
   isFallback?: boolean
 }
 
+export function getRenderableRouteCoordinates(
+  points: GeoPoint[],
+  route: RouteGeometryResult | null | undefined,
+): [number, number][] {
+  if (route?.coordinates.length) return route.coordinates
+  return points.map((point) => [point.latitude, point.longitude] as [number, number])
+}
+
 const clientRouteCache = new Map<string, RouteGeometryResult>()
 
 export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometryResult | null> {
@@ -153,4 +161,3 @@ export async function fetchStreetRoute(points: GeoPoint[]): Promise<RouteGeometr
   }
   return fallbackResult
 }
-

@@ -67,6 +67,16 @@ export const reportRepository = {
     return this.list().find((report) => report.id === id)
   },
 
+  remove(id: string) {
+    const reports = this.list()
+    const index = reports.findIndex((report) => report.id === id)
+    if (index < 0) throw new Error('Ocorrência não encontrada.')
+
+    const [removed] = reports.splice(index, 1)
+    saveReports(reports)
+    return removed
+  },
+
   create(input: CreateReportInput) {
     const reports = this.list()
     const created: Report = {

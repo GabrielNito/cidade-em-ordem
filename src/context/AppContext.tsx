@@ -45,6 +45,7 @@ interface AppContextValue {
   assignReport: (id: string, assignedTo: string) => Report
   startReport: (id: string) => Report
   finishReport: (id: string, completionPhoto: string) => Report
+  deleteReport: (id: string) => Report
   refreshReports: () => void
   createIntervention: (input: CreateInterventionInput) => ScheduledIntervention
   updateIntervention: (id: string, input: UpdateInterventionInput) => ScheduledIntervention
@@ -234,6 +235,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return updated
   }
 
+  const deleteReport = (id: string) => {
+    if (!session || session.role !== 'MANAGER') {
+      throw new Error('Somente gestores municipais podem excluir ocorrências.')
+    }
+
+    const removed = reportRepository.remove(id)
+    refreshReports()
+
+    setNotifications((prev) => {
+      const updated = prev.filter((notification) => notification.reportId !== id)
+      saveNotifications(updated)
+      return updated
+    })
+
+    if (typeof window !== 'undefined') {
+      try {
+        const activeRouteKey = 'cidade-em-ordem:active-route:v1'
+        const storedRoute = localStorage.getItem(activeRouteKey)
+        if (storedRoute) {
+          const parsed = JSON.parse(storedRoute) as { reportIds?: unknown }
+          if (Array.isArray(parsed.reportIds)) {
+            const reportIds = parsed.reportIds.filter((reportId): reportId is string => reportId !== id)
+            localStorage.setItem(activeRouteKey, JSON.stringify({ ...parsed, reportIds }))
+          }
+        }
+      } catch {
+        // A stale route should not prevent the manager from removing the report.
+      }
+    }
+
+    return removed
+  }
+
   const createIntervention = (input: CreateInterventionInput) => {
     if (!session || session.role !== 'MANAGER') {
       throw new Error('Somente gestores municipais podem cadastrar intervenções programadas.')
@@ -367,6 +401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     assignReport,
     startReport,
     finishReport,
+    deleteReport,
     refreshReports,
     createIntervention,
     updateIntervention,
