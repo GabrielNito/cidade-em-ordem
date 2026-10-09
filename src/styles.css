@@ -1754,6 +1754,12 @@ button:active:not(:disabled), a:active { transform: scale(.98); }
   z-index: 60;
 }
 
+/* The expanded layer controls need room for their checkbox labels and counts.
+   Keep that extra width temporary so the closed mobile controls stay balanced. */
+.map-filter-control-layers.map-filter-control-open {
+  flex-grow: 2.7;
+}
+
 .map-filter-trigger {
   width: 100%;
   min-height: 44px;

@@ -92,3 +92,16 @@ Scope: maintain the Next.js frontend while preserving the current domain behavio
   CHECK: node -e "const fs=require('fs'); const map=fs.readFileSync('src/components/maps/IssueMapClient.tsx','utf8'); const geo=fs.readFileSync('src/utils/geo.ts','utf8'); const ui=fs.readFileSync('src/screens/management/ManagementDashboardPage.tsx','utf8'); const requiredMap=['fetchStreetRoute','getRenderableRouteCoordinates']; const requiredGeo=['/api/route-path']; const requiredDelete=['Validação em 3 etapas','delete-report-ack','delete-report-protocol','Excluir definitivamente','setDeleteStep']; if(requiredMap.some((x)=>!map.includes(x)) || requiredGeo.some((x)=>!geo.includes(x)) || requiredDelete.some((x)=>!ui.includes(x))) process.exit(1); console.log('RUNTIME INTERACTION CONTRACT PASSED')"
   EXPECT: RUNTIME INTERACTION CONTRACT PASSED
   EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=968fbd824cc6/41 entries; EXPECT=matched; output-sha256=b9424b8ce66cad38d8dfbd3fa236accdb5550d9a43071c7b9c3c226ee49792ba; output-bytes=36
+
+- [x] G19: opening the layers filter has an isolated mobile width-expansion contract
+  CHECK: node -e "const fs=require('fs'); const page=fs.readFileSync('src/screens/citizen/CitizenMapPage.tsx','utf8'); const css=fs.readFileSync('src/styles.css','utf8'); if(!page.includes('map-filter-control-layers') || !css.includes('.map-filter-control-layers.map-filter-control-open') || !css.includes('flex-grow: 2.7')) process.exit(1); console.log('LAYER FILTER EXPANSION CONTRACT PASSED')"
+  EXPECT: LAYER FILTER EXPANSION CONTRACT PASSED
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=33b616d78b8f/37 entries; EXPECT=matched; output-sha256=02d510c04a7f01921a2f12cee05f40c8c621ac0b8d50a6e7326429969da2f6df; output-bytes=39
+
+- [x] G20: at a 390px mobile viewport, the opened layers filter shows both labels and counts without horizontal clipping
+  EVIDENCE: Chrome production review at 390×844: opened control=169.75px and options client/scroll width=168px; “Ocorrências (16)” and “Intervenções (4)” both fully visible; screenshot=/tmp/codex-layer-filter-mobile.png.
+
+- [x] G21: static analysis and the production build pass after the mobile layers-filter change
+  CHECK: npm run typecheck && npm run lint && npm run build && echo "MOBILE LAYER FILTER BUILD PASSED"
+  EXPECT: MOBILE LAYER FILTER BUILD PASSED
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/home/local/www/projeto; path=33b616d78b8f/37 entries; EXPECT=matched; output-sha256=cbb34f7c07d8910ed956099193aec865edea7cafbebbb0bde4ae8e8cbf4f8f96; output-bytes=1205

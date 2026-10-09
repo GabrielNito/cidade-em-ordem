@@ -131,7 +131,7 @@ export function CitizenMapPage() {
         />
 
         {/* Camadas do Mapa */}
-        <div className={`map-filter-control ${openFilter === 'layers' ? 'map-filter-control-open' : ''}`}>
+        <div className={`map-filter-control map-filter-control-layers ${openFilter === 'layers' ? 'map-filter-control-open' : ''}`}>
           <button
             type="button"
             className="map-filter-trigger"
